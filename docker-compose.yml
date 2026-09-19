@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gazarra}
+      POSTGRES_USER: ${POSTGRES_USER:-gazarra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gazarra}
+    ports: ["5432:5432"]
+    volumes: ["gazarra_pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gazarra} -d ${POSTGRES_DB:-gazarra}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: ./backend
+    env_file: [.env]
+    ports: ["8001:8000"]
+    volumes: ["./data:/app/data"]
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    build: ./frontend
+    ports: ["8080:80"]
+    depends_on: [backend]
+volumes:
+  gazarra_pgdata:

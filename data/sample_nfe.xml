@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe><ide><nNF>12345</nNF></ide><emit><CNPJ>12345678000190</CNPJ><xNome>Fornecedor Demonstração Ltda.</xNome></emit><det nItem="1"><prod><cProd>SUP-001</cProd><cEAN>7890000000011</cEAN><xProd>ACUCAR CRISTAL 5KG</xProd><NCM>17019900</NCM><uCom>UN</uCom><qCom>10.0000</qCom><vUnCom>22.50</vUnCom></prod></det></infNFe></NFe></nfeProc>

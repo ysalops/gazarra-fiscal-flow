@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GAZARRA POC</title>
+<link href="css/styles.css?v=14" rel="stylesheet"/>
+</head>
+<body class="auth-locked">
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="login-mark">G</span>
+      <div><strong>GAZARRA</strong><small>Fiscal Flow</small></div>
+    </div>
+    <span class="login-kicker">ACESSO AO AMBIENTE</span>
+    <h1>Entre na plataforma</h1>
+    <p>Use seu perfil GAZARRA para acessar apenas as empresas e módulos autorizados.</p>
+    <form id="loginForm">
+      <label>E-mail<input id="loginEmail" type="email" autocomplete="username" value="admin@gazarra.local" required/></label>
+      <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" value="Gazarra@123" required/></label>
+      <button type="submit">Entrar</button>
+    </form>
+    <div id="loginMessage" class="login-message hidden"></div>
+    <div class="login-demo-note">
+      <strong>Ambiente demonstrativo</strong>
+      <span>Admin: admin@gazarra.local · Analista: analista@gazarra.local</span>
+    </div>
+  </div>
+</div>
+
+<aside class="sidebar">
+<div class="brand brand-logo">
+<span aria-hidden="true" class="brand-symbol"><img alt="" src="assets/gazzara-logo.png"/></span>
+<span class="brand-wordmark"><strong>gazarra</strong><small>assessoria contábil</small></span>
+<span class="poc-tag">/ POC</span>
+</div>
+<button class="nav active" data-view="dashboard"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 10.5V20h13v-9.5"></path><path d="M9.5 20v-5.5h5V20"></path></svg></span><span class="nav-label">Dashboard</span></button>
+<button class="nav" data-view="fiscal-dashboard"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20V7"></path></svg></span><span class="nav-label">Dashboard Fiscal</span></button>
+<button class="nav" data-view="gazarra-ai"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M12 3l1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3Z"></path><path d="M18 13l.8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13Z"></path></svg></span><span class="nav-label">GAZARRA IA</span><span class="nav-beta">Beta</span></button>
+<button class="nav" data-view="xml"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h5"></path><path d="M10 13h5M10 17h5"></path></svg></span><span class="nav-label">XML</span></button>
+<button class="nav" data-view="mapper"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><rect height="7" rx="1" width="7" x="3" y="3"></rect><rect height="7" rx="1" width="7" x="14" y="3"></rect><rect height="7" rx="1" width="7" x="3" y="14"></rect><rect height="7" rx="1" width="7" x="14" y="14"></rect></svg></span><span class="nav-label">Product Mapper</span></button>
+<button class="nav" data-view="review"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9l2 2 4-4"></path><path d="M8 15h8"></path></svg></span><span class="nav-label">Revisão humana</span></button>
+<button class="nav" data-view="iss"><span class="nav-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg></span><span class="nav-label">Consulta ISS</span></button>
+<button class="nav admin-only hidden" data-view="admin"><span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path><path d="M18 7h4M20 5v4"></path></svg></span><span class="nav-label">Administração</span></button>
+<div class="sidebar-spacer"></div>
+<div class="sidebar-footer">
+<div class="support-row">? <span>Ajuda e suporte</span></div>
+<div class="user-row"><span class="user-avatar" id="sidebarUserAvatar">G</span><div><strong id="sidebarUserName">Usuário GAZARRA</strong><small id="sidebarUserRole">—</small></div><button class="logout-button" id="btnLogout" type="button" title="Sair">↗</button></div>
+<div class="sidebar-tagline"><strong>GAZARRA</strong><span>Tecnologia que simplifica o seu fiscal.</span></div>
+</div>
+</aside>
+<main>
+<header>
+<div>
+<h1>GAZARRA Fiscal Flow</h1>
+<p>
+          Prova de conceito —
+          ambiente demonstrativo
+        </p>
+</div>
+<div class="header-right">
+<div class="header-badges">
+<span class="context-badge" id="appContextBadge">
+            Contexto: Cliente Alpha
+          </span>
+<span class="badge">
+<i class="status-dot"></i> Ambiente local
+          </span>
+</div>
+<div class="brand-tagline">
+          Mais conformidade.<br/>
+          Mais eficiência.<br/>
+          Mais resultado.
+        </div>
+</div>
+</header>
+<!-- =====================================================
+         DASHBOARD
+    ====================================================== -->
+<section class="view active-view" id="dashboard">
+<div class="cards">
+<article class="card"><span class="kpi-icon"><svg viewbox="0 0 24 24"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M2.5 20v-2a5.5 5.5 0 0 1 11 0v2"></path><path d="M16 8h5M18.5 5.5v5"></path></svg></span>
+<span>Empresas acessíveis</span>
+<strong id="dashboardCompaniesCount">—</strong>
+<small class="trend trend-up">↑ +25% vs. mês anterior</small>
+</article>
+<article class="card"><span class="kpi-icon"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"></path><path d="M15 3v5h5"></path><path d="M9 12h7M9 16h5"></path></svg></span>
+<span>Pendências</span>
+<strong>12</strong>
+<small class="trend trend-down">↑ +20% vs. mês anterior</small>
+</article>
+<article class="card"><span class="kpi-icon"><svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16 9"></path></svg></span>
+<span>Matches homologados</span>
+<strong>78</strong>
+<small class="trend trend-up">↑ +18% vs. mês anterior</small>
+</article>
+<article class="card"><span class="kpi-icon"><svg viewbox="0 0 24 24"><path d="M4 20V12M10 20V6M16 20v-9M22 20V3"></path></svg></span>
+<span>Fechamentos do mês</span>
+<strong>3</strong>
+<small class="trend trend-warn">Em andamento · 5 empresas</small>
+</article>
+</div>
+<div class="panel">
+<h2>Fluxo da POC</h2>
+<p>
+          A demonstração atual valida a leitura de XML,
+          o De/Para de produtos, a homologação humana
+          e a reutilização dos vínculos aprovados.
+        </p>
+<div class="flow"><span class="flow-step"><i><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h5"></path><path d="M10 13h5M10 17h5"></path></svg></i><strong>XML</strong><small>Leitura e validação</small></span><b>→</b><span class="flow-step"><i><svg viewbox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"></path><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"></path></svg></i><strong>Regras</strong><small>Aplicação de regras fiscais</small></span><b>→</b><span class="flow-step"><i><svg aria-hidden="true" viewbox="0 0 24 24"><rect height="7" rx="1" width="7" x="3" y="3"></rect><rect height="7" rx="1" width="7" x="14" y="3"></rect><rect height="7" rx="1" width="7" x="3" y="14"></rect><rect height="7" rx="1" width="7" x="14" y="14"></rect></svg></i><strong>Product Mapper</strong><small>De/Para de produtos</small></span><b>→</b><span class="flow-step"><i><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9l2 2 4-4"></path><path d="M8 15h8"></path></svg></i><strong>Revisão humana</strong><small>Conferência e homologação</small></span><b>→</b><span class="flow-step"><i><svg viewbox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"></ellipse><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5"></path><path d="M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"></path></svg></i><strong>Histórico</strong><small>Rastreabilidade</small></span></div>
+</div>
+<div class="dashboard-lower-grid">
+<div class="panel dashboard-chart-card">
+<div class="section-title compact-title">
+<div>
+<h2>Processamento de XML</h2>
+<p>Visão geral dos últimos 7 dias</p>
+</div>
+<span class="mini-pill">Últimos 7 dias</span>
+</div>
+<div aria-label="Gráfico demonstrativo de processamento" class="mock-chart">
+<div class="mock-bar" style="--h:46%"><span>10/09</span></div>
+<div class="mock-bar" style="--h:58%"><span>11/09</span></div>
+<div class="mock-bar" style="--h:88%"><span>12/09</span></div>
+<div class="mock-bar" style="--h:64%"><span>13/09</span></div>
+<div class="mock-bar" style="--h:40%"><span>14/09</span></div>
+<div class="mock-bar" style="--h:78%"><span>15/09</span></div>
+<div class="mock-bar" style="--h:66%"><span>16/09</span></div>
+</div>
+<div class="chart-legend">
+<span><i class="legend-dot processed"></i> Processados</span>
+<span><i class="legend-dot pending"></i> Com pendência</span>
+<span><i class="legend-dot neutral"></i> Não processados</span>
+</div>
+</div>
+<div class="panel activity-card">
+<div class="section-title compact-title">
+<div>
+<h2>Atividades recentes</h2>
+<p>Últimas operações do ambiente</p>
+</div>
+</div>
+<div class="activity-list">
+<div class="activity-item"><i class="activity-icon ok">✓</i><div><strong>XML processado com sucesso</strong><span>NFe demonstrativa processada</span></div><time>19:18</time></div>
+<div class="activity-item"><i class="activity-icon warn">!</i><div><strong>Pendência identificada</strong><span>Produto sem mapeamento</span></div><time>18:45</time></div>
+<div class="activity-item"><i class="activity-icon info">↗</i><div><strong>Mapeamento homologado</strong><span>De/Para confirmado por usuário</span></div><time>17:32</time></div>
+<div class="activity-item"><i class="activity-icon ok">✓</i><div><strong>Fechamento processado</strong><span>Cliente demonstrativo Alpha</span></div><time>16:20</time></div>
+<div class="activity-item"><i class="activity-icon ai">✦</i><div><strong>Sugestão da GAZARRA IA</strong><span>3 produtos sugeridos para mapeamento</span></div><time>15:11</time></div>
+</div>
+</div>
+</div>
+</section>
+<!-- =====================================================
+         DASHBOARD FISCAL
+    ====================================================== -->
+<section class="view" id="fiscal-dashboard">
+<div class="fiscal-hero">
+<div>
+<span class="fiscal-eyebrow">
+            FECHAMENTO FISCAL
+          </span>
+<h2>Dashboard Fiscal</h2>
+<p>
+            Visão executiva por cliente e competência,
+            preparada para futura integração com o Domínio.
+          </p>
+</div>
+<span class="fiscal-demo-badge">
+          Dados simulados
+        </span>
+</div>
+<div class="panel fiscal-filter-panel">
+<div class="fiscal-toolbar fiscal-toolbar-v14">
+  <div class="company-search-group">
+    <label>Cliente
+      <div class="company-search-box">
+        <span class="search-icon">⌕</span>
+        <input id="fiscalCompanySearch" autocomplete="off" placeholder="Digite a razão social..."/>
+      </div>
+    </label>
+    <div class="company-suggestions hidden" id="fiscalCompanySuggestions"></div>
+    <select class="visually-hidden" id="fiscalCompany" aria-hidden="true" tabindex="-1"><option value="">Carregando clientes...</option></select>
+  </div>
+  <label>CNPJ
+    <input id="fiscalCnpjSearch" autocomplete="off" inputmode="numeric" placeholder="00.000.000/0000-00"/>
+  </label>
+  <label>Competência
+    <select id="fiscalCompetence"><option value="">Selecione um cliente</option></select>
+  </label>
+  <button id="btnFiscalRefresh" type="button">Atualizar painel</button>
+</div>
+<p class="fiscal-source-note" id="fiscalSourceNote">
+          Fonte atual: MockFiscalProvider — ambiente demonstrativo.
+        </p>
+</div>
+<div class="ai-mini-panel">
+<div class="ai-mini-head">
+<div>
+<span class="ai-eyebrow">GAZARRA IA</span>
+<h3>Assistente do fechamento</h3>
+<p>
+              Pergunte sobre os indicadores da empresa e competência selecionadas.
+            </p>
+</div>
+<span class="ai-status-badge ai-status-demo" id="fiscalAiStatus">
+            Modo demonstrativo
+          </span>
+</div>
+<div class="ai-suggestion-row">
+<button class="ai-suggestion" data-ai-mini-prompt="Resuma os principais pontos deste fechamento." type="button">
+            Resumir fechamento
+          </button>
+<button class="ai-suggestion" data-ai-mini-prompt="Existem pendências ou pontos de atenção nesta competência?" type="button">
+            Ver pontos de atenção
+          </button>
+<button class="ai-suggestion" data-ai-mini-prompt="Por que o DAS variou em relação ao mês anterior?" type="button">
+            Explicar DAS
+          </button>
+</div>
+<div class="ai-mini-answer hidden" id="fiscalAiAnswer"></div>
+<div class="ai-compose ai-compose-compact">
+<textarea id="fiscalAiInput" placeholder="Pergunte sobre DAS, ST, DIFAL, obrigações, certidões..." rows="2"></textarea>
+<button id="btnFiscalAiSend" type="button">
+            Perguntar à IA
+          </button>
+</div>
+</div>
+<div class="loading hidden" id="fiscalLoading">
+        Carregando indicadores fiscais...
+      </div>
+<div id="fiscalMessage"></div>
+<div class="hidden" id="fiscalContent">
+<div class="fiscal-company-strip">
+<div>
+<span class="small-label">
+              Cliente selecionado
+            </span>
+<strong id="fiscalCompanyName">
+              —
+            </strong>
+</div>
+<div>
+<span class="small-label">
+              CNPJ
+            </span>
+<strong id="fiscalCompanyCnpj">
+              —
+            </strong>
+</div>
+<div>
+<span class="small-label">
+              Regime
+            </span>
+<strong id="fiscalCompanyRegime">
+              —
+            </strong>
+</div>
+<div>
+<span class="small-label">
+              Localização
+            </span>
+<strong id="fiscalCompanyLocation">
+              —
+            </strong>
+</div>
+</div>
+<div class="fiscal-kpis">
+<article class="fiscal-kpi">
+<span>Faturamento sem ST</span>
+<strong id="kpiRevenueWithoutSt">R$ 0,00</strong>
+<small>Receita da competência</small>
+</article>
+<article class="fiscal-kpi">
+<span>Faturamento com ST</span>
+<strong id="kpiRevenueWithSt">R$ 0,00</strong>
+<small>Receita total considerada</small>
+</article>
+<article class="fiscal-kpi fiscal-kpi-accent">
+<span>DAS</span>
+<strong id="kpiDas">R$ 0,00</strong>
+<small>Simples Nacional</small>
+</article>
+<article class="fiscal-kpi">
+<span>Alíquota efetiva</span>
+<strong id="kpiEffectiveRate">0,00%</strong>
+<small>Carga efetiva da competência</small>
+</article>
+<article class="fiscal-kpi">
+<span>Substituição Tributária</span>
+<strong id="kpiSt">R$ 0,00</strong>
+<small>ST da competência</small>
+</article>
+<article class="fiscal-kpi">
+<span>DIFAL</span>
+<strong id="kpiDifal">R$ 0,00</strong>
+<small>Antecipação / diferencial</small>
+</article>
+</div>
+<div class="fiscal-two-columns">
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>Comparativo mensal</h2>
+<p>
+                  Competência atual versus mês anterior.
+                </p>
+</div>
+</div>
+<div class="fiscal-comparison-list" id="fiscalMonthlyComparison"></div>
+</div>
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>Comparativo anual</h2>
+<p>
+                  Competência atual versus mesmo mês do ano anterior.
+                </p>
+</div>
+</div>
+<div class="fiscal-comparison-list" id="fiscalYearlyComparison"></div>
+</div>
+</div>
+<div class="panel panel-spacing">
+<div class="section-title">
+<div>
+<h2>Histórico dos últimos 12 meses</h2>
+<p>
+                Evolução dos principais indicadores fiscais.
+              </p>
+</div>
+</div>
+<div class="fiscal-chart-grid">
+<article class="fiscal-chart-card">
+<div class="fiscal-chart-header">
+<span>Faturamento sem ST</span>
+<strong id="historyRevenueValue">—</strong>
+</div>
+<div id="chartRevenue"></div>
+</article>
+<article class="fiscal-chart-card">
+<div class="fiscal-chart-header">
+<span>DAS</span>
+<strong id="historyDasValue">—</strong>
+</div>
+<div id="chartDas"></div>
+</article>
+<article class="fiscal-chart-card">
+<div class="fiscal-chart-header">
+<span>ST</span>
+<strong id="historyStValue">—</strong>
+</div>
+<div id="chartSt"></div>
+</article>
+</div>
+</div>
+<div class="panel panel-spacing">
+<div class="section-title">
+<div>
+<h2>Simples Nacional</h2>
+<p>
+                Acompanhamento do limite e sublimite ICMS/ISS.
+              </p>
+</div>
+</div>
+<div class="fiscal-simples-grid">
+<div class="fiscal-limit-card">
+<div class="fiscal-limit-head">
+<div>
+<span>Limite geral</span>
+<strong id="simplesAccumulated">—</strong>
+</div>
+<b id="simplesUsedPercentage">—</b>
+</div>
+<div class="fiscal-progress">
+<span id="simplesProgressBar"></span>
+</div>
+<small id="simplesLimitText">—</small>
+</div>
+<div class="fiscal-limit-card">
+<div class="fiscal-limit-head">
+<div>
+<span>Sublimite ICMS/ISS</span>
+<strong id="simplesSublimit">—</strong>
+</div>
+<b id="simplesSublimitUsed">—</b>
+</div>
+<div class="fiscal-progress">
+<span id="simplesSublimitProgressBar"></span>
+</div>
+<small id="simplesSublimitText">—</small>
+</div>
+</div>
+</div>
+<div class="fiscal-two-columns panel-spacing">
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>ST por UF</h2>
+<p>
+                  Detalhamento demonstrativo das operações.
+                </p>
+</div>
+</div>
+<div id="fiscalStTable"></div>
+</div>
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>DIFAL</h2>
+<p>
+                  Detalhamento por fornecedor e documento.
+                </p>
+</div>
+</div>
+<div id="fiscalDifalTable"></div>
+</div>
+</div>
+<div class="fiscal-two-columns panel-spacing">
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>Certidões</h2>
+<p>
+                  Situação das certidões do cliente.
+                </p>
+</div>
+</div>
+<div class="fiscal-certificate-list" id="fiscalCertificates"></div>
+</div>
+<div class="panel">
+<div class="section-title">
+<div>
+<h2>Obrigações acessórias</h2>
+<p>
+                  Entregas vinculadas à competência.
+                </p>
+</div>
+</div>
+<div id="fiscalObligations"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- =====================================================
+         GAZARRA IA
+    ====================================================== -->
+<section class="view" id="gazarra-ai">
+<div class="ai-hero">
+<div>
+<span class="ai-eyebrow">INTELIGÊNCIA FISCAL</span>
+<h2>GAZARRA <em>IA</em></h2>
+<h3>Assistente fiscal e operacional</h3>
+<p>
+            Converse com a inteligência da Gazarra. Análise de XML, apuração de tributos,
+            regras fiscais, obrigações acessórias e muito mais.
+          </p>
+</div>
+
+</div>
+<div class="panel ai-context-panel">
+<div class="ai-context-grid">
+<label>
+            Cliente
+            <select id="aiCompany">
+<option value="">Carregando clientes...</option>
+</select>
+</label>
+<label>
+            Competência
+            <select id="aiCompetence">
+<option value="">Selecione um cliente</option>
+</select>
+</label>
+<label>
+            Especialista
+            <select id="aiAgent">
+<option value="auto">Automático — deixar a IA escolher</option>
+</select>
+</label>
+</div>
+<div class="ai-context-footer">
+<span id="aiContextNote">
+            O contexto da conversa acompanha a empresa e a competência selecionadas.
+          </span>
+
+</div>
+</div>
+<div class="ai-workspace">
+<div class="panel ai-chat-panel">
+<div class="section-title">
+<div>
+<h2>Conversa</h2>
+<p>
+                A IA consulta os dados disponíveis e seleciona o agente mais aderente à pergunta.
+              </p>
+</div>
+<button class="ghost-button" id="btnAiClear" type="button">
+              Limpar conversa
+            </button>
+</div>
+<div class="ai-quick-grid" id="aiQuickPrompts">
+<button data-ai-prompt="Resuma o fechamento desta competência e destaque os principais pontos de atenção." type="button">
+              Resumir fechamento
+            </button>
+<button data-ai-prompt="Existem pendências críticas ou obrigações que exigem revisão humana?" type="button">
+              Verificar pendências
+            </button>
+<button data-ai-prompt="Explique a variação do DAS em relação ao mês anterior e ao mesmo período anual disponível." type="button">
+              Explicar DAS
+            </button>
+<button data-ai-prompt="Analise ST e DIFAL desta competência e indique o que precisa ser conferido." type="button">
+              Analisar ST e DIFAL
+            </button>
+</div>
+<div class="ai-conversation" id="aiConversation"><div class="ai-message ai-message-assistant ai-greeting">
+<div class="ai-assistant-avatar">✦</div>
+<div class="ai-message-content">
+<span class="ai-message-label">GAZARRA IA</span>
+<div class="ai-answer-text"><p>Olá! Eu sou a <strong>GAZARRA IA</strong>.</p><p>Posso apoiar análises de fechamento, XML, tributos, regras fiscais e pendências usando o contexto selecionado.</p><p>Como posso ajudar hoje?</p></div>
+</div>
+</div></div>
+<div class="ai-compose">
+<textarea id="aiInput" placeholder="Ex.: O que merece atenção antes de concluir este fechamento?" rows="3"></textarea>
+<button id="btnAiSend" type="button">
+              Enviar
+            </button>
+</div>
+<p class="ai-disclaimer">
+            A GAZARRA IA apoia análise e priorização. Ações fiscais críticas continuam dependentes de revisão humana.
+          </p>
+</div>
+<aside class="panel ai-side-panel">
+<div>
+<span class="small-label">Último agente acionado</span>
+<strong id="aiLastAgent">—</strong>
+</div>
+<div>
+<span class="small-label">Revisão humana</span>
+<strong id="aiHumanReview">—</strong>
+</div>
+<div>
+<span class="small-label">Fontes utilizadas</span>
+<div class="ai-sources" id="aiSources">
+<span>Nenhuma consulta realizada.</span>
+</div>
+</div>
+<div>
+<span class="small-label">Sobre os agentes</span>
+<p>
+              As especificações estão em homologação. No modo automático,
+              o roteador escolhe o especialista sem exigir que o usuário saiba qual agente utilizar.
+            </p>
+</div>
+<div class="ai-tech-context">
+<span class="small-label">Contexto técnico</span>
+<div class="ai-tech-badges"><span class="ai-status-badge ai-status-demo" id="aiProviderBadge">Provedor: demo</span><span class="ai-status-badge" id="aiAgentsBadge">Agentes: —</span></div>
+<p id="aiEnvironmentNote">Fonte: mock · ambiente demo</p>
+</div></aside>
+</div>
+</section>
+<!-- =====================================================
+         XML
+    ====================================================== -->
+<section class="view" id="xml">
+<div class="page-heading">
+<div><span class="page-kicker">XML · PROCESSAMENTO</span><h2>Processamento de XML</h2><p>Faça o upload de uma NF-e para extrair dados e encaminhar os produtos ao Product Mapper.</p></div>
+<span class="page-status"><i class="status-dot"></i> Ambiente local</span>
+</div>
+<div class="xml-upload-layout">
+<div class="panel xml-upload-card">
+<label class="xml-dropzone" for="xmlFile" id="xmlDropzone">
+<span class="xml-drop-icon">▤</span>
+<div><strong id="xmlFileName">Selecione um arquivo XML de NF-e</strong><small>Arraste e solte ou clique para selecionar</small><small>Apenas arquivos .xml</small></div>
+<span class="xml-select-button">Selecionar arquivo</span>
+</label>
+<input accept=".xml" class="visually-hidden" id="xmlFile" type="file"/>
+</div>
+<button class="xml-process-button" id="btnXml">▶   Processar XML</button>
+</div>
+<div class="loading hidden" id="xmlLoading">Processando XML...</div>
+<div class="xml-result-zone" id="xmlResult">
+<div class="xml-empty-state">
+<span class="empty-icon">▤</span>
+<div><strong>Nenhum XML processado nesta sessão</strong><p>Após o processamento, os dados da nota e os produtos aparecerão aqui.</p></div>
+</div>
+</div>
+</section>
+<!-- =====================================================
+         PRODUCT MAPPER
+    ====================================================== -->
+<section class="view" id="mapper">
+<div class="page-heading">
+<div><span class="page-kicker">DE/PARA · HOMOLOGAÇÃO</span><h2>Product Mapper</h2><p>Mapeamento assistido de produtos com revisão humana e rastreabilidade.</p></div>
+<span class="page-status"><i class="status-dot"></i> Ambiente local</span>
+</div>
+<div class="mapper-kpis">
+<article><span class="mapper-kpi-icon blue">◇</span><div><small>Itens pendentes</small><strong id="mapperPendingKpi">—</strong></div></article>
+<article><span class="mapper-kpi-icon green">✓</span><div><small>Homologados</small><strong id="mapperHomologatedKpi">—</strong></div></article>
+<article><span class="mapper-kpi-icon gold">◷</span><div><small>Revisão manual</small><strong id="mapperReviewKpi">—</strong></div></article>
+<article><span class="mapper-kpi-icon red">⊘</span><div><small>Bloqueados</small><strong id="mapperBlockedKpi">—</strong></div></article>
+</div>
+<div class="panel mapper-test-panel">
+<div class="section-title"><div><h2>Teste individual</h2><p>Valide um produto do fornecedor antes de homologar o vínculo.</p></div></div>
+<div class="grid-2 mapper-test-grid">
+<label>Descrição do fornecedor<input id="supplierDescription" value="Açúcar cristal 5kg"/></label>
+<label>GTIN do fornecedor<input id="supplierGtin" value="7890000000011"/></label>
+</div>
+<div class="mapper-test-actions"><button id="btnMatch">Gerar sugestão</button></div>
+<div class="result-box" id="matchResult"></div>
+</div>
+<div class="panel panel-spacing mapper-table-panel">
+<div class="section-title mapper-section-header">
+<div><h2>Mapeamento de produtos</h2><p>Confira sugestões, confiança e vínculos já registrados.</p></div>
+<button class="secondary-button" id="btnLoadMappings">Atualizar</button>
+</div>
+<div class="mapper-filterbar">
+<div class="mapper-search">⌕ <input id="mapperVisualSearch" placeholder="Buscar por produto, código ou NCM..."/></div>
+<select id="mapperVisualStatus"><option>Todos os status</option><option>Homologados</option><option>Revisão</option><option>Bloqueados</option></select>
+<span class="mapper-filter-note">Filtros visuais · dados do cliente em contexto</span>
+</div>
+<div id="mappingsResult"></div>
+</div>
+</section>
+<!-- =====================================================
+     REVISÃO HUMANA
+    ====================================================== -->
+<section class="view" id="review">
+<div class="page-heading">
+<div><span class="page-kicker">GOVERNANÇA · HUMANO NO LOOP</span><h2>Revisão humana</h2><p>Fila de validação para exceções, baixa confiança e decisões que exigem confirmação.</p></div>
+<button class="secondary-button" id="btnRefreshReview">Atualizar fila</button>
+</div>
+<div class="review-summary review-summary-v13" id="reviewSummary">
+<div class="review-stat"><span>Total pendente</span><strong id="reviewTotal">0</strong><small>Itens na fila</small></div>
+<div class="review-stat"><span>Para revisão</span><strong id="reviewPending">0</strong><small>Exigem validação</small></div>
+<div class="review-stat"><span>Bloqueados</span><strong id="reviewBlocked">0</strong><small>Aguardando tratamento</small></div>
+<div class="review-stat review-stat-accent"><span>Política</span><strong>Human-in-the-loop</strong><small>Decisões críticas não são automáticas</small></div>
+</div>
+<div class="panel review-queue-panel">
+<div class="section-title"><div><h2>Fila de revisão</h2><p>Priorize itens com maior impacto e menor confiança.</p></div><span class="mini-pill">Empresa em contexto</span></div>
+<div id="reviewQueue"><div class="review-empty review-empty-v13"><span class="empty-check">✓</span><div><strong>Nenhum item carregado ainda</strong><p>Abra esta tela para consultar a fila atual da empresa selecionada.</p></div></div></div>
+</div>
+</section>
+<!-- =====================================================
+         ADMINISTRAÇÃO
+    ====================================================== -->
+<section class="view" id="admin">
+  <div class="page-heading">
+    <div><span class="page-kicker">ACESSOS · SEGREGAÇÃO POR CARTEIRA</span><h2>Administração</h2><p>Gerencie usuários e defina quais empresas cada analista pode acessar.</p></div>
+    <span class="page-status">Somente administrador</span>
+  </div>
+  <div class="admin-layout">
+    <div class="panel admin-users-panel">
+      <div class="section-title"><div><h2>Usuários</h2><p>Perfis ativos no ambiente.</p></div><button class="secondary-button" id="btnNewUser" type="button">Novo analista</button></div>
+      <div id="adminUsersList" class="admin-users-list"><div class="admin-loading">Carregando usuários...</div></div>
+    </div>
+    <div class="panel admin-company-panel">
+      <div class="section-title"><div><h2>Empresas do analista</h2><p id="adminSelectedUserText">Selecione um analista para gerenciar a carteira.</p></div></div>
+      <div class="admin-company-search"><span>⌕</span><input id="adminCompanySearch" placeholder="Pesquisar por empresa ou CNPJ" disabled/></div>
+      <div id="adminCompanyList" class="admin-company-list"><div class="admin-empty">Nenhum analista selecionado.</div></div>
+      <div class="admin-actions"><span id="adminAssignmentStatus"></span><button id="btnSaveAssignments" type="button" disabled>Salvar empresas</button></div>
+    </div>
+  </div>
+  <div class="panel panel-spacing admin-audit-panel">
+    <div class="section-title"><div><h2>Trilha de auditoria</h2><p>Últimas alterações de acesso realizadas no ambiente.</p></div><button class="secondary-button" id="btnRefreshAudit" type="button">Atualizar</button></div>
+    <div id="adminAuditList" class="admin-audit-list"><div class="admin-empty">Carregando auditoria...</div></div>
+  </div>
+</section>
+<!-- =====================================================
+         CONSULTA ISS
+    ====================================================== -->
+<section class="view" id="iss">
+<div class="page-heading">
+<div><span class="page-kicker">TRIBUTOS MUNICIPAIS</span><h2>Consulta ISS</h2><p>Consulte alíquotas e regras municipais na base demonstrativa da POC.</p></div>
+<span class="page-status"><i class="status-dot"></i> Ambiente local</span>
+</div>
+<div class="iss-layout-v13">
+<div>
+<div class="panel iss-search-card">
+<div class="section-title"><div><h2>Buscar regras de ISS</h2><p>Informe município, UF e o código de serviço.</p></div></div>
+<div class="iss-form-grid">
+<label>Município<input id="issMunicipio" placeholder="Município" value="Campinas"/></label>
+<label>UF<input id="issUf" maxlength="2" placeholder="UF" value="SP"/></label>
+<label>Código do serviço<input id="issCodigo" placeholder="Ex.: 1.05"/></label>
+<button id="btnIss">⌕   Consultar</button>
+</div>
+</div>
+<div class="iss-result-v13" id="issResult">
+<div class="iss-placeholder-grid">
+<article><span>%</span><small>Alíquota</small><strong>—</strong><p>Consulte uma regra</p></article>
+<article><span>▤</span><small>Código de serviço</small><strong>—</strong><p>Base demonstrativa</p></article>
+<article><span>◇</span><small>Retenção</small><strong>—</strong><p>Aguardando consulta</p></article>
+<article><span>✓</span><small>Situação</small><strong>—</strong><p>Sem consulta ativa</p></article>
+</div>
+</div>
+</div>
+<aside class="iss-side-v13">
+<div class="panel"><div class="section-title compact-title"><div><h2>Últimas consultas</h2><p>Atalhos demonstrativos</p></div></div><div class="iss-recent-list"><button type="button">São Paulo · SP <small>6201-5/01</small></button><button type="button">Rio de Janeiro · RJ <small>6201-5/01</small></button><button type="button">Belo Horizonte · MG <small>6311-9/00</small></button><button type="button">Curitiba · PR <small>6202-3/00</small></button></div></div>
+<div class="panel iss-guidance"><div class="section-title compact-title"><div><h2>Orientações</h2><p>Leitura rápida</p></div></div><details><summary>Como é definida a alíquota?</summary><p>Consulte a legislação municipal vigente para o serviço e município selecionados.</p></details><details><summary>Quando há retenção?</summary><p>A regra depende do serviço, município, tomador e hipóteses previstas em legislação.</p></details><details><summary>CNAE e código de serviço</summary><p>São classificações distintas e precisam ser validadas em conjunto.</p></details><div class="iss-warning">Base atual demonstrativa. A fonte oficial será conectada posteriormente.</div></div>
+</aside>
+</div>
+</section>
+<footer class="app-footer">© 2026 GAZARRA · Desenvolvido por <a href="https://ylume.dev.br" target="_blank" rel="noopener noreferrer">Ylume.dev.br</a></footer>
+</main>
+<div class="modal-overlay hidden" id="newUserModal">
+  <div class="modal-card admin-user-modal">
+    <div class="modal-header"><div><span class="modal-eyebrow">ADMINISTRAÇÃO</span><h2>Novo usuário</h2><p>Crie um perfil para a equipe e atribua as empresas depois.</p></div><button class="modal-close" id="btnCloseNewUser" type="button">×</button></div>
+    <div class="modal-body">
+      <div class="modal-field"><label>Nome</label><input id="newUserName" placeholder="Nome do analista"/></div>
+      <div class="modal-field"><label>E-mail</label><input id="newUserEmail" type="email" placeholder="analista@gazarra.com.br"/></div>
+      <div class="modal-field"><label>Senha temporária</label><input id="newUserPassword" type="password" placeholder="Mínimo 6 caracteres"/></div>
+      <div class="modal-field"><label>Perfil</label><select id="newUserRole"><option value="analyst">Analista</option><option value="admin">Administrador</option></select></div>
+      <div id="newUserMessage" class="modal-message hidden"></div>
+    </div>
+    <div class="modal-footer"><button class="ghost-button" id="btnCancelNewUser" type="button">Cancelar</button><button id="btnCreateUser" type="button">Criar usuário</button></div>
+  </div>
+</div>
+<!-- =====================================================
+      MODAL DE HOMOLOGAÇÃO / REVISÃO
+  ====================================================== -->
+<div class="modal-overlay hidden" id="reviewModal">
+<div class="modal-card">
+<div class="modal-header">
+<div>
+<span class="modal-eyebrow">
+            PRODUCT MAPPER
+          </span>
+<h2 id="modalTitle">
+            Revisar De/Para
+          </h2>
+<p id="modalDescription">
+            Revise a correspondência antes de confirmar.
+          </p>
+</div>
+<button class="modal-close" id="btnCloseModal" type="button">
+          ×
+        </button>
+</div>
+<div class="modal-body">
+<div class="modal-field" id="modalProductGroup">
+<label for="modalProductSelect">
+            Produto interno correto
+          </label>
+<select id="modalProductSelect">
+</select>
+</div>
+<div class="modal-field">
+<label for="modalRationale">
+            Justificativa
+          </label>
+<textarea id="modalRationale" placeholder="Descreva o motivo da decisão..." rows="4"></textarea>
+</div>
+<div class="modal-message hidden" id="modalMessage">
+</div>
+</div>
+<div class="modal-footer">
+<button class="ghost-button" id="btnCancelModal" type="button">
+          Cancelar
+        </button>
+<button id="btnConfirmModal" type="button">
+          Confirmar ajuste
+        </button>
+</div>
+</div>
+</div>
+<script src="js/app.js?v=14"></script>
+</body>
+</html>

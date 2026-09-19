@@ -1,0 +1,4 @@
+municipio,uf,codigo_ibge,codigo_servico,descricao_servico,aliquota,vigencia,fonte
+Campinas,SP,3509502,01.01,Análise e desenvolvimento de sistemas,2.00,DEMO,DEMONSTRAÇÃO
+Campinas,SP,3509502,17.05,Fornecimento de mão de obra,3.00,DEMO,DEMONSTRAÇÃO
+São Bernardo do Campo,SP,3548708,01.01,Análise e desenvolvimento de sistemas,2.00,DEMO,DEMONSTRAÇÃO
