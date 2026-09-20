@@ -179,9 +179,29 @@ if (loginForm) {
       if (!response.ok) throw new Error(data.detail || "Não foi possível entrar.");
       localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
       updateUserUI(data.user);
-      await bootstrapAccessibleContext();
+
+      // Estado dependente do usuário nunca deve sobreviver à troca de sessão.
+      // Além de evitar contexto inconsistente, isso impede que um Analista veja
+      // a conversa que havia sido feita anteriormente por um Administrador.
       fiscalDashboardInitialized = false;
       gazarraAiInitialized = false;
+      clearAiConversation();
+
+      await bootstrapAccessibleContext();
+
+      // Se o login ocorreu enquanto a tela da IA já estava aberta atrás do
+      // overlay de autenticação, recarrega imediatamente empresas e competências
+      // autorizadas para o NOVO usuário. Sem isso, o select podia mostrar
+      // Mai/2026 do usuário anterior enquanto appContext.competence continuava null.
+      const activeView = document.querySelector(".view.active-view")?.id;
+      if (activeView === "gazarra-ai") {
+        await initializeGazarraAI();
+      }
+
+      if (activeView === "fiscal-dashboard") {
+        await initializeFiscalDashboard();
+      }
+
       hideLoginScreen();
     } catch (error) {
       if (message) {
@@ -200,6 +220,23 @@ if (btnLogout) {
     currentUser = null;
     fiscalDashboardInitialized = false;
     gazarraAiInitialized = false;
+
+    // Limpa dados visuais vinculados à sessão anterior antes de exibir o login.
+    clearAiConversation();
+
+    if (aiCompanySelect) {
+      aiCompanySelect.innerHTML = `<option value="">Carregando clientes...</option>`;
+    }
+
+    if (aiCompetenceSelect) {
+      aiCompetenceSelect.innerHTML = `<option value="">Selecione um cliente</option>`;
+    }
+
+    const contextNote = document.getElementById("aiContextNote");
+    if (contextNote) {
+      contextNote.textContent = "Contexto será carregado após o login.";
+    }
+
     showLoginScreen();
   });
 }
@@ -3279,882 +3316,495 @@ async function searchIss() {
    GAZARRA IA
 ========================================================= */
 
-const aiCompanySelect =
-  document.getElementById("aiCompany");
+const aiCompanySelect = document.getElementById("aiCompany");
+const aiCompetenceSelect = document.getElementById("aiCompetence");
+const aiAgentSelect = document.getElementById("aiAgent");
+const aiInput = document.getElementById("aiInput");
+const btnAiSend = document.getElementById("btnAiSend");
+const btnAiAttach = document.getElementById("btnAiAttach");
+const aiFileInput = document.getElementById("aiFileInput");
+const btnAiClear = document.getElementById("btnAiClear");
+const btnAiRefreshHistory = document.getElementById("btnAiRefreshHistory");
+const fiscalAiInput = document.getElementById("fiscalAiInput");
+const btnFiscalAiSend = document.getElementById("btnFiscalAiSend");
 
-const aiCompetenceSelect =
-  document.getElementById("aiCompetence");
-
-const aiAgentSelect =
-  document.getElementById("aiAgent");
-
-const aiInput =
-  document.getElementById("aiInput");
-
-const btnAiSend =
-  document.getElementById("btnAiSend");
-
-const btnAiClear =
-  document.getElementById("btnAiClear");
-
-const fiscalAiInput =
-  document.getElementById("fiscalAiInput");
-
-const btnFiscalAiSend =
-  document.getElementById("btnFiscalAiSend");
-
+let aiActiveConversationId = null;
+let aiPinnedCompanyId = null;
+let aiPendingAttachments = [];
+let aiStreamingText = "";
 
 if (aiCompanySelect) {
-  aiCompanySelect.addEventListener(
-    "change",
-    async () => {
-      const companyId =
-        Number(aiCompanySelect.value);
-
-      const companyName =
-        aiCompanySelect.options[
-          aiCompanySelect.selectedIndex
-        ]?.textContent?.trim();
-
-      updateAppContext({
-        companyId,
-        companyName,
-        competence: null
-      });
-
-      await loadAiCompetences(
-        companyId,
-        true
-      );
-    }
-  );
+  aiCompanySelect.addEventListener("change", () => {
+    aiPinnedCompanyId = aiCompanySelect.value ? Number(aiCompanySelect.value) : null;
+    renderAiContextNote();
+  });
 }
 
+if (btnAiSend) btnAiSend.addEventListener("click", sendAiMessage);
+if (btnAiAttach) btnAiAttach.addEventListener("click", () => aiFileInput?.click());
+if (btnAiClear) btnAiClear.addEventListener("click", clearAiConversation);
+if (btnAiRefreshHistory) btnAiRefreshHistory.addEventListener("click", loadAiConversationHistory);
 
-if (aiCompetenceSelect) {
-  aiCompetenceSelect.addEventListener(
-    "change",
-    () => {
-      updateAppContext({
-        competence:
-          aiCompetenceSelect.value
-      });
-
-      renderAiContextNote();
-    }
-  );
+if (aiFileInput) {
+  aiFileInput.addEventListener("change", async () => {
+    const files = [...(aiFileInput.files || [])];
+    aiFileInput.value = "";
+    if (files.length) await uploadAiFiles(files);
+  });
 }
-
-
-if (btnAiSend) {
-  btnAiSend.addEventListener(
-    "click",
-    sendAiMessage
-  );
-}
-
-
-if (btnAiClear) {
-  btnAiClear.addEventListener(
-    "click",
-    clearAiConversation
-  );
-}
-
 
 if (aiInput) {
-  aiInput.addEventListener(
-    "keydown",
-    (event) => {
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
-        event.preventDefault();
-        sendAiMessage();
-      }
+  aiInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendAiMessage();
     }
-  );
+  });
+  aiInput.addEventListener("input", autoResizeAiInput);
 }
 
-
-if (btnFiscalAiSend) {
-  btnFiscalAiSend.addEventListener(
-    "click",
-    () => sendFiscalAiMessage()
-  );
-}
-
-
+if (btnFiscalAiSend) btnFiscalAiSend.addEventListener("click", () => sendFiscalAiMessage());
 if (fiscalAiInput) {
-  fiscalAiInput.addEventListener(
-    "keydown",
-    (event) => {
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
-        event.preventDefault();
-        sendFiscalAiMessage();
-      }
+  fiscalAiInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendFiscalAiMessage();
     }
-  );
+  });
 }
 
-
-document
-  .querySelectorAll("[data-ai-prompt]")
-  .forEach((button) => {
-    button.addEventListener(
-      "click",
-      () => {
-        if (!aiInput) {
-          return;
-        }
-
-        aiInput.value =
-          button.dataset.aiPrompt || "";
-
-        sendAiMessage();
-      }
-    );
+document.querySelectorAll("[data-ai-mini-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!fiscalAiInput) return;
+    fiscalAiInput.value = button.dataset.aiMiniPrompt || "";
+    sendFiscalAiMessage();
   });
+});
 
-
-document
-  .querySelectorAll("[data-ai-mini-prompt]")
-  .forEach((button) => {
-    button.addEventListener(
-      "click",
-      () => {
-        if (!fiscalAiInput) {
-          return;
-        }
-
-        fiscalAiInput.value =
-          button.dataset.aiMiniPrompt || "";
-
-        sendFiscalAiMessage();
-      }
-    );
-  });
-
+function autoResizeAiInput() {
+  if (!aiInput) return;
+  aiInput.style.height = "auto";
+  aiInput.style.height = `${Math.min(aiInput.scrollHeight, 180)}px`;
+}
 
 async function initializeGazarraAI() {
-  if (gazarraAiInitialized) {
-    syncAiControlsWithContext();
-    return;
-  }
-
+  if (gazarraAiInitialized) return;
   gazarraAiInitialized = true;
-
   await Promise.all([
     loadAiStatus(),
-    loadAiAgents(),
-    loadAiCompanies()
+    loadAiCompanies(),
+    loadAiConversationHistory()
   ]);
-}
-
-
-async function loadAiStatus() {
-  try {
-    const response = await fetch(
-      `${API}/ai/status`
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.detail ||
-        "Erro ao consultar status da GAZARRA IA."
-      );
-    }
-
-    gazarraAiStatus = data;
-    renderAiStatus(data);
-
-  } catch (error) {
-    renderAiStatus({
-      provider: "indisponível",
-      agents_loaded: 0,
-      data_source: "—",
-      environment: "—",
-      configured: false
-    });
-  }
-}
-
-
-function renderAiStatus(data) {
-  const providerBadge =
-    document.getElementById("aiProviderBadge");
-
-  const agentsBadge =
-    document.getElementById("aiAgentsBadge");
-
-  const environmentNote =
-    document.getElementById("aiEnvironmentNote");
-
-  const fiscalStatus =
-    document.getElementById("fiscalAiStatus");
-
-  if (providerBadge) {
-    const provider =
-      data.provider || "demo";
-
-    providerBadge.textContent =
-      `Provedor: ${provider}`;
-
-    providerBadge.classList.toggle(
-      "ai-status-demo",
-      provider === "demo"
-    );
-  }
-
-  if (agentsBadge) {
-    agentsBadge.textContent =
-      `Agentes: ${data.agents_loaded ?? "—"}`;
-  }
-
-  if (environmentNote) {
-    environmentNote.textContent =
-      `Fonte: ${data.data_source || "—"} · ambiente ${data.environment || "—"}`;
-  }
-
-  if (fiscalStatus) {
-    fiscalStatus.textContent =
-      data.provider === "demo"
-        ? "Modo demonstrativo"
-        : `IA ativa · ${data.provider}`;
-
-    fiscalStatus.classList.toggle(
-      "ai-status-demo",
-      data.provider === "demo"
-    );
-  }
-}
-
-
-async function loadAiAgents() {
-  if (!aiAgentSelect) {
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `${API}/ai/agents`
-    );
-
-    const agents = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        agents.detail ||
-        "Erro ao carregar agentes."
-      );
-    }
-
-    gazarraAiAgents = agents;
-
-    const grouped = {};
-
-    agents.forEach((agent) => {
-      const category =
-        agent.category || "Outros";
-
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-
-      grouped[category].push(agent);
-    });
-
-    let html = `
-      <option value="auto">
-        Automático — deixar a IA escolher
-      </option>
-    `;
-
-    Object
-      .keys(grouped)
-      .sort()
-      .forEach((category) => {
-        html += `
-          <optgroup label="${escapeHtml(category)}">
-            ${grouped[category]
-              .map((agent) => `
-                <option value="${escapeHtml(agent.name)}">
-                  ${escapeHtml(agent.title)}
-                </option>
-              `)
-              .join("")}
-          </optgroup>
-        `;
-      });
-
-    aiAgentSelect.innerHTML = html;
-
-  } catch (error) {
-    aiAgentSelect.innerHTML = `
-      <option value="auto">
-        Automático
-      </option>
-    `;
-  }
-}
-
-
-async function loadAiCompanies() {
-  if (!aiCompanySelect) {
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `${API}/fiscal/companies`
-    );
-
-    const companies = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        companies.detail ||
-        "Erro ao carregar clientes."
-      );
-    }
-
-    aiCompanySelect.innerHTML =
-      companies.map((company) => `
-        <option value="${company.id}">
-          ${escapeHtml(company.name)}
-        </option>
-      `).join("");
-
-    const preferred =
-      companies.find(
-        (company) =>
-          Number(company.id) ===
-          Number(appContext.companyId)
-      ) || companies[0];
-
-    if (!preferred) {
-      return;
-    }
-
-    aiCompanySelect.value =
-      String(preferred.id);
-
-    updateAppContext({
-      companyId: preferred.id,
-      companyName: preferred.name
-    });
-
-    await loadAiCompetences(
-      preferred.id,
-      true
-    );
-
-  } catch (error) {
-    aiCompanySelect.innerHTML = `
-      <option value="">
-        Não foi possível carregar clientes
-      </option>
-    `;
-  }
-}
-
-
-async function loadAiCompetences(
-  companyId,
-  keepContext = false
-) {
-  if (!aiCompetenceSelect) {
-    return;
-  }
-
-  aiCompetenceSelect.disabled = true;
-
-  try {
-    const response = await fetch(
-      `${API}/fiscal/companies/${companyId}/competences`
-    );
-
-    const competences = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        competences.detail ||
-        "Erro ao carregar competências."
-      );
-    }
-
-    const ordered = [
-      ...competences
-    ].reverse();
-
-    aiCompetenceSelect.innerHTML =
-      ordered.map((competence) => `
-        <option value="${escapeHtml(competence)}">
-          ${formatCompetence(competence)}
-        </option>
-      `).join("");
-
-    if (ordered.length) {
-      const preferred =
-        keepContext &&
-        ordered.includes(appContext.competence)
-          ? appContext.competence
-          : ordered[0];
-
-      aiCompetenceSelect.value = preferred;
-
-      updateAppContext({
-        competence: preferred
-      });
-    }
-
-    renderAiContextNote();
-
-  } catch (error) {
-    aiCompetenceSelect.innerHTML = `
-      <option value="">
-        Erro ao carregar competências
-      </option>
-    `;
-
-  } finally {
-    aiCompetenceSelect.disabled = false;
-  }
-}
-
-
-function syncAiControlsWithContext() {
-  if (
-    aiCompanySelect &&
-    [...aiCompanySelect.options].some(
-      (option) =>
-        Number(option.value) ===
-        Number(appContext.companyId)
-    )
-  ) {
-    aiCompanySelect.value =
-      String(appContext.companyId);
-  }
-
-  if (
-    aiCompetenceSelect &&
-    appContext.competence &&
-    [...aiCompetenceSelect.options].some(
-      (option) =>
-        option.value ===
-        appContext.competence
-    )
-  ) {
-    aiCompetenceSelect.value =
-      appContext.competence;
-  }
-
   renderAiContextNote();
 }
 
-
-function renderAiContextNote() {
-  const note =
-    document.getElementById("aiContextNote");
-
-  if (!note) {
-    return;
+async function loadAiStatus() {
+  try {
+    const response = await fetch(`${API}/ai/status`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Erro ao carregar status da IA.");
+    gazarraAiStatus = data;
+    const provider = document.getElementById("aiProviderBadge");
+    const agents = document.getElementById("aiAgentsBadge");
+    const env = document.getElementById("aiEnvironmentNote");
+    if (provider) {
+      provider.textContent = `Provedor: ${data.provider || "—"}`;
+      provider.classList.toggle("ai-status-demo", data.provider === "demo");
+    }
+    if (agents) agents.textContent = `Agentes: ${data.agents_loaded ?? "—"}`;
+    if (env) env.textContent = `Fonte: ${data.data_source || "—"} · ambiente ${data.environment || "—"}`;
+  } catch (error) {
+    const provider = document.getElementById("aiProviderBadge");
+    if (provider) provider.textContent = "Provedor indisponível";
   }
-
-  note.textContent =
-    `Contexto ativo: ${appContext.companyName}` +
-    `${appContext.competence ? ` · ${formatCompetence(appContext.competence)}` : ""}`;
 }
 
-
-async function askGazarraAI({
-  message,
-  agent = "auto"
-}) {
-  if (!message?.trim()) {
-    throw new Error(
-      "Digite uma pergunta para a GAZARRA IA."
-    );
-  }
-
-  if (!appContext.companyId) {
-    throw new Error(
-      "Selecione uma empresa."
-    );
-  }
-
-  if (!appContext.competence) {
-    throw new Error(
-      "Selecione uma competência."
-    );
-  }
-
-  const response = await fetch(
-    `${API}/ai/chat`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":
-          "application/json; charset=utf-8"
-      },
-      body: JSON.stringify({
-        company_id:
-          Number(appContext.companyId),
-        competence:
-          appContext.competence,
-        message:
-          message.trim(),
-        agent:
-          agent || "auto"
-      })
+async function loadAiCompanies() {
+  if (!aiCompanySelect) return;
+  try {
+    const response = await fetch(`${API}/fiscal/companies`);
+    const companies = await response.json();
+    if (!response.ok) throw new Error(companies.detail || "Erro ao carregar empresas.");
+    aiCompanySelect.innerHTML = `
+      <option value="">Automático — identificar pela pergunta</option>
+      ${companies.map((company) => `
+        <option value="${company.id}">${escapeHtml(company.name)}</option>
+      `).join("")}
+    `;
+    if (aiPinnedCompanyId && companies.some((company) => Number(company.id) === Number(aiPinnedCompanyId))) {
+      aiCompanySelect.value = String(aiPinnedCompanyId);
+    } else {
+      aiPinnedCompanyId = null;
+      aiCompanySelect.value = "";
     }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      data.detail ||
-      "Não foi possível consultar a GAZARRA IA."
-    );
+  } catch (_) {
+    aiCompanySelect.innerHTML = `<option value="">Contexto automático</option>`;
   }
+}
 
+function renderAiContextNote() {
+  const note = document.getElementById("aiContextNote");
+  const summary = document.getElementById("aiContextSummary");
+  if (!aiPinnedCompanyId) {
+    if (summary) summary.textContent = "Contexto automático";
+    if (note) note.textContent = "Empresa e competência podem ser informadas naturalmente na pergunta.";
+    return;
+  }
+  const option = aiCompanySelect?.options[aiCompanySelect.selectedIndex];
+  const name = option?.textContent || `Empresa ${aiPinnedCompanyId}`;
+  if (summary) summary.textContent = `Contexto: ${name}`;
+  if (note) note.textContent = "A empresa está fixada; a competência continua sendo identificada pela conversa.";
+}
+
+async function loadAiConversationHistory() {
+  const list = document.getElementById("aiConversationList");
+  if (!list) return;
+  try {
+    const response = await fetch(`${API}/ai/conversations`);
+    const conversations = await response.json();
+    if (!response.ok) throw new Error(conversations.detail || "Erro ao carregar conversas.");
+    if (!conversations.length) {
+      list.innerHTML = `<div class="ai-v16-history-empty">Suas conversas aparecerão aqui.</div>`;
+      return;
+    }
+    list.innerHTML = conversations.map((conversation) => `
+      <button type="button" class="ai-v16-history-item ${conversation.id === aiActiveConversationId ? "active" : ""}" data-ai-conversation-id="${conversation.id}">
+        <span>${escapeHtml(conversation.title)}</span>
+        <small>${formatAiHistoryDate(conversation.updated_at)}</small>
+      </button>
+    `).join("");
+    list.querySelectorAll("[data-ai-conversation-id]").forEach((button) => {
+      button.addEventListener("click", () => loadAiConversation(button.dataset.aiConversationId));
+    });
+  } catch (error) {
+    list.innerHTML = `<div class="ai-v16-history-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function formatAiHistoryDate(value) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  } catch (_) {
+    return "";
+  }
+}
+
+async function loadAiConversation(conversationId) {
+  if (!conversationId || gazarraAiBusy) return;
+  try {
+    const response = await fetch(`${API}/ai/conversations/${conversationId}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Erro ao abrir conversa.");
+    aiActiveConversationId = data.id;
+    aiPendingAttachments = [];
+    renderAiAttachmentTray();
+    const conversation = document.getElementById("aiConversation");
+    if (conversation) conversation.innerHTML = "";
+    (data.messages || []).forEach((message) => appendAiMessage(message.role, message.content));
+    await loadAiConversationHistory();
+  } catch (error) {
+    appendAiMessage("error", error.message);
+  }
+}
+
+async function uploadAiFiles(files) {
+  setAiBusy(true, "Anexando...");
+  try {
+    for (const file of files.slice(0, 8 - aiPendingAttachments.length)) {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`${API}/ai/attachments`, { method: "POST", body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `Não foi possível anexar ${file.name}.`);
+      aiPendingAttachments.push(data);
+    }
+    renderAiAttachmentTray();
+  } catch (error) {
+    appendAiMessage("error", error.message);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+function renderAiAttachmentTray() {
+  const tray = document.getElementById("aiAttachmentTray");
+  if (!tray) return;
+  tray.classList.toggle("hidden", aiPendingAttachments.length === 0);
+  tray.innerHTML = aiPendingAttachments.map((item, index) => `
+    <div class="ai-v16-attachment-chip">
+      <span>${item.kind === "image" ? "▧" : "▤"}</span>
+      <div><strong>${escapeHtml(item.filename)}</strong><small>${formatFileSize(item.size)}</small></div>
+      <button type="button" data-remove-ai-attachment="${index}" title="Remover">×</button>
+    </div>
+  `).join("");
+  tray.querySelectorAll("[data-remove-ai-attachment]").forEach((button) => {
+    button.addEventListener("click", () => {
+      aiPendingAttachments.splice(Number(button.dataset.removeAiAttachment), 1);
+      renderAiAttachmentTray();
+    });
+  });
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(Number(bytes))) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function sendAiMessage() {
+  if (gazarraAiBusy || !aiInput) return;
+  const message = aiInput.value.trim();
+  if (!message && !aiPendingAttachments.length) return;
+
+  const attachmentSnapshot = [...aiPendingAttachments];
+  appendAiMessage("user", message || "Analise os arquivos anexados.", null, attachmentSnapshot);
+  aiInput.value = "";
+  autoResizeAiInput();
+  const streamBubble = appendAiStreamingMessage();
+  setAiBusy(true);
+
+  try {
+    const response = await fetch(`${API}/ai/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        company_id: aiPinnedCompanyId,
+        competence: null,
+        message: message || "Analise os arquivos anexados.",
+        agent: "auto",
+        conversation_id: aiActiveConversationId,
+        attachments: attachmentSnapshot.map((item) => item.id)
+      })
+    });
+    if (!response.ok) {
+      let detail = "Não foi possível consultar a GAZARRA IA.";
+      try { detail = (await response.json()).detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+
+    aiStreamingText = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let finalData = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.type === "start") {
+          aiActiveConversationId = event.conversation_id || aiActiveConversationId;
+          setStreamingLabel(streamBubble, event.agent_title || "GAZARRA IA");
+        } else if (event.type === "delta") {
+          aiStreamingText += event.text || "";
+          updateStreamingBubble(streamBubble, aiStreamingText);
+        } else if (event.type === "done") {
+          finalData = event.data;
+        } else if (event.type === "error") {
+          throw new Error(event.message || "Erro na resposta da IA.");
+        }
+      }
+    }
+
+    finalizeStreamingBubble(streamBubble, aiStreamingText, finalData);
+    if (finalData) {
+      aiActiveConversationId = finalData.conversation_id || aiActiveConversationId;
+      renderAiResponseMetadata(finalData);
+    }
+    aiPendingAttachments = [];
+    renderAiAttachmentTray();
+    await loadAiConversationHistory();
+  } catch (error) {
+    streamBubble?.remove();
+    appendAiMessage("error", error.message);
+  } finally {
+    setAiBusy(false);
+    aiInput?.focus();
+  }
+}
+
+function appendAiStreamingMessage() {
+  const conversation = document.getElementById("aiConversation");
+  if (!conversation) return null;
+  conversation.querySelector(".ai-welcome")?.remove();
+  const bubble = document.createElement("div");
+  bubble.className = "ai-message ai-message-assistant ai-v16-streaming";
+  bubble.innerHTML = `
+    <div class="ai-message-label">GAZARRA IA</div>
+    <div class="ai-answer-text ai-stream-text"><span class="ai-cursor"></span></div>
+    <details class="ai-message-details hidden"><summary>Ver fontes e detalhes</summary><div></div></details>
+  `;
+  conversation.appendChild(bubble);
+  scrollAiConversation();
+  return bubble;
+}
+
+function setStreamingLabel(bubble, label) {
+  const el = bubble?.querySelector(".ai-message-label");
+  if (el) el.textContent = label;
+}
+
+function updateStreamingBubble(bubble, text) {
+  const el = bubble?.querySelector(".ai-stream-text");
+  if (!el) return;
+  el.textContent = text;
+  el.insertAdjacentHTML("beforeend", `<span class="ai-cursor"></span>`);
+  scrollAiConversation();
+}
+
+function finalizeStreamingBubble(bubble, text, metadata) {
+  const el = bubble?.querySelector(".ai-stream-text");
+  if (el) el.innerHTML = formatAiText(text);
+  if (metadata) {
+    setStreamingLabel(bubble, metadata.agent_title || "GAZARRA IA");
+    const details = bubble?.querySelector(".ai-message-details");
+    const body = details?.querySelector("div");
+    if (details && body) {
+      const sources = (metadata.sources_used || []).map((source) => `<span>${escapeHtml(source)}</span>`).join("");
+      body.innerHTML = `
+        <p><strong>Agente:</strong> ${escapeHtml(metadata.agent_title || metadata.agent_used || "GAZARRA IA")}</p>
+        ${sources ? `<div class="ai-sources">${sources}</div>` : ""}
+        ${metadata.requires_human_review ? `<p class="ai-review-note">Revisão humana indicada para ação crítica.</p>` : ""}
+      `;
+      details.classList.remove("hidden");
+    }
+  }
+  scrollAiConversation();
+}
+
+async function askGazarraAI({ message, agent = "auto" }) {
+  const response = await fetch(`${API}/ai/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      company_id: appContext.companyId || null,
+      competence: appContext.competence || null,
+      message: message.trim(),
+      agent,
+      attachments: []
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Não foi possível consultar a GAZARRA IA.");
   return data;
 }
 
-
-async function sendAiMessage() {
-  if (
-    gazarraAiBusy ||
-    !aiInput
-  ) {
-    return;
-  }
-
-  const message =
-    aiInput.value.trim();
-
-  if (!message) {
-    return;
-  }
-
-  appendAiMessage(
-    "user",
-    message
-  );
-
-  aiInput.value = "";
-
-  const loadingId =
-    appendAiLoading();
-
-  setAiBusy(true);
-
-  try {
-    const data = await askGazarraAI({
-      message,
-      agent:
-        aiAgentSelect?.value || "auto"
-    });
-
-    removeAiLoading(loadingId);
-
-    appendAiMessage(
-      "assistant",
-      data.answer,
-      data
-    );
-
-    renderAiResponseMetadata(data);
-
-  } catch (error) {
-    removeAiLoading(loadingId);
-
-    appendAiMessage(
-      "error",
-      error.message
-    );
-
-  } finally {
-    setAiBusy(false);
-  }
-}
-
-
-async function sendFiscalAiMessage(
-  prompt = null
-) {
-  if (gazarraAiBusy) {
-    return;
-  }
-
-  const answerBox =
-    document.getElementById("fiscalAiAnswer");
-
-  const message =
-    (prompt || fiscalAiInput?.value || "")
-      .trim();
-
-  if (!message) {
-    return;
-  }
-
-  if (fiscalAiInput) {
-    fiscalAiInput.value = "";
-  }
-
+async function sendFiscalAiMessage(prompt = null) {
+  if (gazarraAiBusy) return;
+  const answerBox = document.getElementById("fiscalAiAnswer");
+  const message = (prompt || fiscalAiInput?.value || "").trim();
+  if (!message || !answerBox) return;
+  if (fiscalAiInput) fiscalAiInput.value = "";
   answerBox.classList.remove("hidden");
-  answerBox.innerHTML = `
-    <div class="ai-thinking">
-      GAZARRA IA analisando o contexto fiscal...
-    </div>
-  `;
-
+  answerBox.innerHTML = `<div class="ai-thinking">GAZARRA IA analisando...</div>`;
   setAiBusy(true);
-
   try {
-    const data = await askGazarraAI({
-      message,
-      agent: "auto"
-    });
-
+    const data = await askGazarraAI({ message, agent: "auto" });
     answerBox.innerHTML = `
       <div class="ai-mini-response">
-        <div class="ai-mini-response-head">
-          <strong>${escapeHtml(data.agent_title || "GAZARRA IA")}</strong>
-          <span>${data.demo_mode ? "Demo" : escapeHtml(data.provider || "IA")}</span>
-        </div>
-        <div class="ai-answer-text">
-          ${formatAiText(data.answer)}
-        </div>
-        <div class="ai-mini-meta">
-          ${data.requires_human_review ? "Requer revisão humana · " : ""}
-          ${escapeHtml((data.sources_used || []).join(" · "))}
-        </div>
-      </div>
-    `;
-
+        <div class="ai-mini-response-head"><strong>${escapeHtml(data.agent_title || "GAZARRA IA")}</strong></div>
+        <div class="ai-answer-text">${formatAiText(data.answer)}</div>
+        <div class="ai-mini-meta">${escapeHtml((data.sources_used || []).join(" · "))}</div>
+      </div>`;
   } catch (error) {
-    answerBox.innerHTML = `
-      <div class="message error">
-        ${escapeHtml(error.message)}
-      </div>
-    `;
-
+    answerBox.innerHTML = `<div class="message error">${escapeHtml(error.message)}</div>`;
   } finally {
     setAiBusy(false);
   }
 }
 
-
-function appendAiMessage(
-  role,
-  message,
-  metadata = null
-) {
-  const conversation =
-    document.getElementById("aiConversation");
-
-  if (!conversation) {
-    return;
-  }
-
-  const welcome =
-    conversation.querySelector(".ai-welcome");
-
-  if (welcome) {
-    welcome.remove();
-  }
-
-  const bubble =
-    document.createElement("div");
-
-  bubble.className =
-    `ai-message ai-message-${role}`;
+function appendAiMessage(role, message, metadata = null, attachments = []) {
+  const conversation = document.getElementById("aiConversation");
+  if (!conversation) return;
+  conversation.querySelector(".ai-welcome")?.remove();
+  const bubble = document.createElement("div");
+  bubble.className = `ai-message ai-message-${role}`;
 
   if (role === "assistant") {
     bubble.innerHTML = `
-      <div class="ai-message-label">
-        ${escapeHtml(metadata?.agent_title || "GAZARRA IA")}
-      </div>
-      <div class="ai-answer-text">
-        ${formatAiText(message)}
-      </div>
-      <div class="ai-message-meta">
-        ${metadata?.demo_mode ? "Modo demonstrativo" : escapeHtml(metadata?.provider || "IA")}
-        ${metadata?.requires_human_review ? " · revisão humana necessária" : ""}
-      </div>
-    `;
+      <div class="ai-message-label">${escapeHtml(metadata?.agent_title || "GAZARRA IA")}</div>
+      <div class="ai-answer-text">${formatAiText(message)}</div>`;
+  } else if (role === "user") {
+    const files = attachments.length ? `<div class="ai-v16-message-files">${attachments.map((item) => `<span>▤ ${escapeHtml(item.filename)}</span>`).join("")}</div>` : "";
+    bubble.innerHTML = `<div class="ai-message-label">Você</div><div>${escapeHtml(message)}</div>${files}`;
+  } else {
+    bubble.innerHTML = `<div class="ai-message-label">Erro</div><div>${escapeHtml(message)}</div>`;
   }
-
-  else if (role === "user") {
-    bubble.innerHTML = `
-      <div class="ai-message-label">Você</div>
-      <div>${escapeHtml(message)}</div>
-    `;
-  }
-
-  else {
-    bubble.innerHTML = `
-      <div class="ai-message-label">Erro</div>
-      <div>${escapeHtml(message)}</div>
-    `;
-  }
-
   conversation.appendChild(bubble);
-  conversation.scrollTop =
-    conversation.scrollHeight;
+  scrollAiConversation();
 }
 
-
-function appendAiLoading() {
-  const conversation =
-    document.getElementById("aiConversation");
-
-  const id =
-    `ai-loading-${Date.now()}`;
-
-  if (conversation) {
-    conversation.insertAdjacentHTML(
-      "beforeend",
-      `
-        <div id="${id}" class="ai-message ai-message-assistant ai-thinking">
-          Analisando contexto e selecionando agente...
-        </div>
-      `
-    );
-
-    conversation.scrollTop =
-      conversation.scrollHeight;
-  }
-
-  return id;
+function scrollAiConversation() {
+  const conversation = document.getElementById("aiConversation");
+  if (conversation) conversation.scrollTop = conversation.scrollHeight;
 }
 
-
-function removeAiLoading(id) {
-  document
-    .getElementById(id)
-    ?.remove();
-}
-
-
-function setAiBusy(value) {
+function setAiBusy(value, label = null) {
   gazarraAiBusy = value;
-
   if (btnAiSend) {
     btnAiSend.disabled = value;
-    btnAiSend.textContent =
-      value ? "Analisando..." : "Enviar";
+    btnAiSend.textContent = value ? "…" : "↑";
+    btnAiSend.title = label || (value ? "Gerando resposta" : "Enviar");
   }
-
+  if (btnAiAttach) btnAiAttach.disabled = value;
   if (btnFiscalAiSend) {
     btnFiscalAiSend.disabled = value;
-    btnFiscalAiSend.textContent =
-      value ? "Analisando..." : "Perguntar à IA";
+    btnFiscalAiSend.textContent = value ? "Analisando..." : "Perguntar à IA";
   }
 }
-
 
 function renderAiResponseMetadata(data) {
-  const lastAgent =
-    document.getElementById("aiLastAgent");
-
-  const humanReview =
-    document.getElementById("aiHumanReview");
-
-  const sources =
-    document.getElementById("aiSources");
-
-  if (lastAgent) {
-    lastAgent.textContent =
-      data.agent_title ||
-      data.agent_used ||
-      "—";
-  }
-
-  if (humanReview) {
-    humanReview.textContent =
-      data.requires_human_review
-        ? "Necessária"
-        : "Não indicada";
-  }
-
+  const lastAgent = document.getElementById("aiLastAgent");
+  const humanReview = document.getElementById("aiHumanReview");
+  const sources = document.getElementById("aiSources");
+  if (lastAgent) lastAgent.textContent = data.agent_title || data.agent_used || "—";
+  if (humanReview) humanReview.textContent = data.requires_human_review ? "Indicada" : "Não indicada";
   if (sources) {
-    sources.innerHTML =
-      (data.sources_used || [])
-        .map((source) => `
-          <span>${escapeHtml(source)}</span>
-        `)
-        .join("") ||
-      "<span>Nenhuma fonte informada.</span>";
+    sources.innerHTML = (data.sources_used || []).map((source) => `<span>${escapeHtml(source)}</span>`).join("") || "<span>Nenhuma fonte interna usada.</span>";
   }
 }
-
 
 function clearAiConversation() {
-  const conversation =
-    document.getElementById("aiConversation");
-
+  aiActiveConversationId = null;
+  aiPendingAttachments = [];
+  aiPinnedCompanyId = null;
+  if (aiCompanySelect) aiCompanySelect.value = "";
+  renderAiAttachmentTray();
+  renderAiContextNote();
+  const conversation = document.getElementById("aiConversation");
   if (conversation) {
     conversation.innerHTML = `
-      <div class="ai-message ai-message-assistant ai-greeting">
-        <div class="ai-assistant-avatar">✦</div>
-        <div class="ai-message-content">
-          <span class="ai-message-label">GAZARRA IA</span>
-          <div class="ai-answer-text">
-            <p>Olá! Eu sou a <strong>GAZARRA IA</strong>.</p>
-            <p>Conversa limpa. Posso ajudar com o fechamento, tributos, XML, mapeamentos e pendências da empresa em contexto.</p>
-            <p>Como posso ajudar hoje?</p>
-          </div>
+      <div class="ai-v16-welcome ai-welcome">
+        <div class="ai-v16-orb">✦</div>
+        <h3>Como posso ajudar?</h3>
+        <p>Converse normalmente, anexe arquivos ou peça uma análise usando os dados da GAZARRA.</p>
+        <div class="ai-v16-examples">
+          <span>“Explique ICMS-ST de forma simples.”</span>
+          <span>“Qual foi o DAS da Beta em maio de 2026?”</span>
+          <span>“Analise o XML que anexei.”</span>
         </div>
-      </div>
-    `;
+      </div>`;
   }
-
-  const lastAgent =
-    document.getElementById("aiLastAgent");
-
-  const humanReview =
-    document.getElementById("aiHumanReview");
-
-  const sources =
-    document.getElementById("aiSources");
-
-  if (lastAgent) {
-    lastAgent.textContent = "—";
-  }
-
-  if (humanReview) {
-    humanReview.textContent = "—";
-  }
-
-  if (sources) {
-    sources.innerHTML =
-      "<span>Nenhuma consulta realizada.</span>";
-  }
+  renderAiResponseMetadata({ agent_title: "—", requires_human_review: false, sources_used: [] });
+  loadAiConversationHistory();
 }
 
-
 function formatAiText(value) {
-  return escapeHtml(value || "")
+  let safe = escapeHtml(value || "");
+  safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
+  return safe
     .split("\n\n")
-    .map((paragraph) =>
-      `<p>${paragraph.replaceAll("\n", "<br>")}</p>`
-    )
+    .map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`)
     .join("");
 }
 
-
-/* =========================================================
-   ADMINISTRAÇÃO E SEGREGAÇÃO DE EMPRESAS
-========================================================= */
 
 async function initializeAdmin() {
   if (!currentUser || currentUser.role !== "admin") return;

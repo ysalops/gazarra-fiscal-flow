@@ -444,121 +444,91 @@
 </div>
 </section>
 <!-- =====================================================
-         GAZARRA IA
+         GAZARRA IA — V16 CHAT-FIRST
     ====================================================== -->
 <section class="view" id="gazarra-ai">
-<div class="ai-hero">
-<div>
-<span class="ai-eyebrow">INTELIGÊNCIA FISCAL</span>
-<h2>GAZARRA <em>IA</em></h2>
-<h3>Assistente fiscal e operacional</h3>
-<p>
-            Converse com a inteligência da Gazarra. Análise de XML, apuração de tributos,
-            regras fiscais, obrigações acessórias e muito mais.
-          </p>
-</div>
+  <div class="ai-v16-shell">
+    <div class="ai-v16-header">
+      <div>
+        <span class="ai-eyebrow">INTELIGÊNCIA GAZARRA</span>
+        <h2>GAZARRA <em>IA</em></h2>
+        <p>Pergunte qualquer coisa. Quando necessário, a IA aciona agentes, dados e ferramentas da GAZARRA.</p>
+      </div>
+      <div class="ai-v16-header-actions">
+        <details class="ai-v16-context-menu">
+          <summary id="aiContextSummary">Contexto automático</summary>
+          <div class="ai-v16-context-popover">
+            <label>
+              Fixar empresa nesta conversa <span>opcional</span>
+              <select id="aiCompany">
+                <option value="">Automático — identificar pela pergunta</option>
+              </select>
+            </label>
+            <p id="aiContextNote">Empresa e competência podem ser informadas naturalmente na pergunta.</p>
+          </div>
+        </details>
+        <button class="ghost-button ai-v16-new-button" id="btnAiClear" type="button">＋ Nova conversa</button>
+      </div>
+    </div>
 
-</div>
-<div class="panel ai-context-panel">
-<div class="ai-context-grid">
-<label>
-            Cliente
-            <select id="aiCompany">
-<option value="">Carregando clientes...</option>
-</select>
-</label>
-<label>
-            Competência
-            <select id="aiCompetence">
-<option value="">Selecione um cliente</option>
-</select>
-</label>
-<label>
-            Especialista
-            <select id="aiAgent">
-<option value="auto">Automático — deixar a IA escolher</option>
-</select>
-</label>
-</div>
-<div class="ai-context-footer">
-<span id="aiContextNote">
-            O contexto da conversa acompanha a empresa e a competência selecionadas.
-          </span>
+    <div class="ai-v16-layout">
+      <aside class="ai-v16-history panel">
+        <div class="ai-v16-history-head">
+          <strong>Conversas</strong>
+          <button id="btnAiRefreshHistory" class="ai-icon-button" type="button" title="Atualizar">↻</button>
+        </div>
+        <div id="aiConversationList" class="ai-v16-history-list">
+          <div class="ai-v16-history-empty">Suas conversas aparecerão aqui.</div>
+        </div>
+        <details class="ai-v16-tech">
+          <summary>Detalhes técnicos</summary>
+          <div class="ai-tech-badges">
+            <span class="ai-status-badge ai-status-demo" id="aiProviderBadge">Provedor: —</span>
+            <span class="ai-status-badge" id="aiAgentsBadge">Agentes: —</span>
+          </div>
+          <p id="aiEnvironmentNote">Ambiente: —</p>
+          <div class="ai-v16-last-meta">
+            <small>Último agente</small><strong id="aiLastAgent">—</strong>
+            <small>Revisão humana</small><strong id="aiHumanReview">—</strong>
+            <small>Fontes</small><div class="ai-sources" id="aiSources"><span>—</span></div>
+          </div>
+        </details>
+      </aside>
 
-</div>
-</div>
-<div class="ai-workspace">
-<div class="panel ai-chat-panel">
-<div class="section-title">
-<div>
-<h2>Conversa</h2>
-<p>
-                A IA consulta os dados disponíveis e seleciona o agente mais aderente à pergunta.
-              </p>
-</div>
-<button class="ghost-button" id="btnAiClear" type="button">
-              Limpar conversa
-            </button>
-</div>
-<div class="ai-quick-grid" id="aiQuickPrompts">
-<button data-ai-prompt="Resuma o fechamento desta competência e destaque os principais pontos de atenção." type="button">
-              Resumir fechamento
-            </button>
-<button data-ai-prompt="Existem pendências críticas ou obrigações que exigem revisão humana?" type="button">
-              Verificar pendências
-            </button>
-<button data-ai-prompt="Explique a variação do DAS em relação ao mês anterior e ao mesmo período anual disponível." type="button">
-              Explicar DAS
-            </button>
-<button data-ai-prompt="Analise ST e DIFAL desta competência e indique o que precisa ser conferido." type="button">
-              Analisar ST e DIFAL
-            </button>
-</div>
-<div class="ai-conversation" id="aiConversation"><div class="ai-message ai-message-assistant ai-greeting">
-<div class="ai-assistant-avatar">✦</div>
-<div class="ai-message-content">
-<span class="ai-message-label">GAZARRA IA</span>
-<div class="ai-answer-text"><p>Olá! Eu sou a <strong>GAZARRA IA</strong>.</p><p>Posso apoiar análises de fechamento, XML, tributos, regras fiscais e pendências usando o contexto selecionado.</p><p>Como posso ajudar hoje?</p></div>
-</div>
-</div></div>
-<div class="ai-compose">
-<textarea id="aiInput" placeholder="Ex.: O que merece atenção antes de concluir este fechamento?" rows="3"></textarea>
-<button id="btnAiSend" type="button">
-              Enviar
-            </button>
-</div>
-<p class="ai-disclaimer">
-            A GAZARRA IA apoia análise e priorização. Ações fiscais críticas continuam dependentes de revisão humana.
-          </p>
-</div>
-<aside class="panel ai-side-panel">
-<div>
-<span class="small-label">Último agente acionado</span>
-<strong id="aiLastAgent">—</strong>
-</div>
-<div>
-<span class="small-label">Revisão humana</span>
-<strong id="aiHumanReview">—</strong>
-</div>
-<div>
-<span class="small-label">Fontes utilizadas</span>
-<div class="ai-sources" id="aiSources">
-<span>Nenhuma consulta realizada.</span>
-</div>
-</div>
-<div>
-<span class="small-label">Sobre os agentes</span>
-<p>
-              As especificações estão em homologação. No modo automático,
-              o roteador escolhe o especialista sem exigir que o usuário saiba qual agente utilizar.
-            </p>
-</div>
-<div class="ai-tech-context">
-<span class="small-label">Contexto técnico</span>
-<div class="ai-tech-badges"><span class="ai-status-badge ai-status-demo" id="aiProviderBadge">Provedor: demo</span><span class="ai-status-badge" id="aiAgentsBadge">Agentes: —</span></div>
-<p id="aiEnvironmentNote">Fonte: mock · ambiente demo</p>
-</div></aside>
-</div>
+      <div class="ai-v16-chat panel">
+        <div class="ai-conversation" id="aiConversation">
+          <div class="ai-v16-welcome ai-welcome">
+            <div class="ai-v16-orb">✦</div>
+            <h3>Como posso ajudar?</h3>
+            <p>Converse normalmente, anexe arquivos ou peça uma análise usando os dados da GAZARRA.</p>
+            <div class="ai-v16-examples">
+              <span>“Explique ICMS-ST de forma simples.”</span>
+              <span>“Qual foi o DAS da Beta em maio de 2026?”</span>
+              <span>“Analise o XML que anexei.”</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="aiAttachmentTray" class="ai-v16-attachment-tray hidden"></div>
+
+        <div class="ai-v16-composer-wrap">
+          <div class="ai-v16-composer">
+            <button id="btnAiAttach" class="ai-v16-attach" type="button" title="Anexar arquivo">＋</button>
+            <textarea id="aiInput" placeholder="Pergunte qualquer coisa à GAZARRA IA..." rows="1"></textarea>
+            <button id="btnAiSend" class="ai-v16-send" type="button" title="Enviar">↑</button>
+          </div>
+          <input id="aiFileInput" class="visually-hidden" type="file" multiple
+                 accept=".pdf,.docx,.xlsx,.csv,.txt,.md,.xml,.json,.png,.jpg,.jpeg,.webp" />
+          <div class="ai-v16-compose-hint">
+            <span>Enter para enviar · Shift+Enter para nova linha</span>
+            <span>PDF · DOCX · XLSX · CSV · XML · imagens</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <select id="aiCompetence" class="visually-hidden" aria-hidden="true"><option value=""></option></select>
+  <select id="aiAgent" class="visually-hidden" aria-hidden="true"><option value="auto">Automático</option></select>
 </section>
 <!-- =====================================================
          XML

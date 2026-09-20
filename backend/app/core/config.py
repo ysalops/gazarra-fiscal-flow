@@ -4,11 +4,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "GAZARRA POC"
     database_url: str = "postgresql+psycopg://gazarra:gazarra@db:5432/gazarra"
+
+    # LLM / IA
     llm_provider: str = "none"
+
+    # Ollama local (desenvolvimento)
+    ollama_base_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "qwen3.5:4b"
+    ollama_think: bool = False
+    ollama_keep_alive: str = "10m"
+    ollama_timeout_seconds: int = 180
+    ollama_num_predict: int = 320
+
+    # AWS Bedrock (produção futura)
     aws_region: str = "us-east-1"
     bedrock_model_id: str = ""
+
+    # OpenAI (opcional)
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"
+
     cors_origins: str = "http://localhost:8080"
 
     # Autenticação local da POC. Trocar AUTH_SECRET antes de qualquer publicação.

@@ -3,7 +3,23 @@ from fastapi import HTTPException
 from app.agents.registry import AgentSpec, get_agent
 
 
-DEFAULT_AGENT = "agente-fiscal-gazarra"
+GENERAL_AGENT = AgentSpec(
+    name="gazarra-general",
+    title="GAZARRA IA",
+    category="Geral",
+    version="1.0",
+    status="ativo",
+    permissions=["read", "assist"],
+    path="internal/general",
+    content=(
+        "Assistente geral da GAZARRA. Responde perguntas amplas, apoia redação, "
+        "explicações, análise e organização do trabalho. Quando a pergunta exigir "
+        "dados internos ou conhecimento especializado, o roteador deve usar agentes "
+        "e ferramentas autorizadas do backend."
+    ),
+)
+
+DEFAULT_AGENT = "gazarra-general"
 
 
 ROUTING_RULES = [
@@ -166,6 +182,23 @@ ROUTING_RULES = [
         ],
         "13-irrf",
     ),
+    (
+        [
+            "icms",
+            "iss",
+            "tributo",
+            "imposto",
+            "fiscal",
+            "nf-e",
+            "nfe",
+            "das",
+            "simples nacional",
+            "cfop",
+            "cst",
+            "csosn",
+        ],
+        "agente-fiscal-gazarra",
+    ),
 ]
 
 
@@ -193,12 +226,10 @@ def select_agent(
             if agent is not None:
                 return agent
 
+    if DEFAULT_AGENT == "gazarra-general":
+        return GENERAL_AGENT
+
     agent = get_agent(DEFAULT_AGENT)
-
     if agent is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Agente fiscal padrão não foi carregado.",
-        )
-
+        return GENERAL_AGENT
     return agent
