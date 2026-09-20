@@ -1,50 +1,99 @@
-GAZARRA IA V15 - FASE 1
-========================
+GAZARRA V16.2 — DOCUMENTOS + AGENT SELECTOR
+===========================================
 
-Objetivo
---------
-Conectar a GAZARRA IA ao Ollama/Qwen 3.5 local, mantendo a arquitetura pronta
-para trocar para Claude via Amazon Bedrock depois.
+O que entra nesta versão
+------------------------
+1. Seletor de agentes com quatro modos:
+   - Automático
+   - Nenhum agente
+   - Manual: 1 ou 2 agentes
+   - Todos disponíveis: todo o catálogo fica elegível e o roteador escolhe no máximo os relevantes
 
-Incluído
---------
-- OllamaProvider via API HTTP do Ollama
-- LLM_PROVIDER=ollama
-- qwen3.5:4b
-- thinking desativado
-- keep_alive configurável
-- tool calling real do Ollama
-- tool list_companies com filtro Admin/Analista
-- tool get_fiscal_dashboard com validação de acesso 403
-- /api/ai/status reconhece provider ollama
-- /api/ai/chat preserva autenticação e autorização existentes
-- DemoProvider/Bedrock/OpenAI continuam disponíveis como arquitetura alternativa
+2. Catálogo de agentes:
+   - resumo imediato extraído da própria especificação .md
+   - capacidades
+   - quando usar
+   - indicador de revisão humana
+   - botão "Gerar resumo com IA"
+   - o resumo é cacheado em /app/data/agent_catalog.json
+   - quando LLM_PROVIDER=bedrock, é o Claude que lê a especificação e gera o resumo
+   - enquanto estiver em Ollama, o mesmo fluxo usa o Qwen local
 
-NÃO substitua seu .env pelo .env.example.
-Edite seu .env local e adicione/ajuste:
+3. Documentos:
+   - extração continua ocorrendo uma única vez no upload
+   - validação numérica determinística é salva em cache
+   - páginas PDF com pouco texto extraível são sinalizadas como visualmente não validadas
+   - prompt proíbe inferências sobre certidões/gráficos/imagens não lidos
+   - histórico anterior não é reenviado na primeira análise do documento
 
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen3.5:4b
-OLLAMA_THINK=false
-OLLAMA_KEEP_ALIVE=10m
-OLLAMA_TIMEOUT_SECONDS=180
+4. Validações do PDF usado no teste:
+   - variação de DAS Maio/2026 x Abril/2026
+   - divergência de ST R$ 6.421,63 x R$ 6.423,63
+   - DIFAL 18,41x x aproximadamente 5,43x
+   - páginas 12, 13 e 14 marcadas como predominantemente visuais
 
-Depois:
-  docker compose build --no-cache backend
-  docker compose up -d --force-recreate backend
-  docker compose logs backend --tail 100
+5. Roteamento:
+   - "Fechamento Fiscal" prioriza Agente Fiscal
+   - menções genéricas a produto não mandam mais um fechamento ao Product Mapper
+   - Manual respeita exatamente os agentes escolhidos
+   - Todos disponíveis NÃO executa 26 agentes; apenas os deixa elegíveis
 
-Testes no navegador:
-1) Entrar como Admin
-2) GAZARRA IA
-3) Perguntar: Quais empresas existem na base?
-   Esperado: Alpha, Beta e Gamma (conforme mock atual)
-4) Entrar como Analista
-5) Perguntar a mesma coisa
-   Esperado: apenas empresas atribuídas ao analista
+6. Performance local:
+   - Ollama num_ctx: 8192
+   - num_predict passa a respeitar OLLAMA_NUM_PREDICT (padrão atual 320)
+   - documentos não carregam histórico antigo na primeira análise
 
-IMPORTANTE
-----------
-O Ollama precisa estar aberto/rodando no Windows.
-O backend Docker acessa o Ollama em host.docker.internal:11434.
+COMO APLICAR
+------------
+1. Recomendado antes de substituir:
+
+   git add .
+   git commit -m "V16.1 estável - chat first e confiabilidade"
+   git push
+
+2. Extraia o conteúdo deste ZIP POR CIMA de:
+
+   C:\Users\Ysa Martinho\Documents\gazarra-poc
+
+   Aceite substituir os arquivos.
+
+3. Reconstrua:
+
+   Set-Location "C:\Users\Ysa Martinho\Documents\gazarra-poc"
+   docker compose build --no-cache backend frontend
+   docker compose up -d --force-recreate backend frontend
+   docker compose ps
+
+4. Abra:
+   http://localhost:8080
+   Ctrl + F5
+
+TESTES RECOMENDADOS
+-------------------
+A) Automático + PDF de fechamento
+   "Analise este arquivo. Separe achados objetivos, inconsistências, pontos de atenção e itens a confirmar."
+   Esperado: Agente Fiscal GAZARRA e destaque para validações numéricas.
+
+B) Manual
+   Selecione Agente Fiscal GAZARRA + Agente de Revisão SPED.
+   Pergunte algo com um arquivo fiscal e confirme que ambos aparecem na resposta/detalhes.
+
+C) Nenhum agente
+   "Explique a diferença entre machine learning e IA generativa."
+   Esperado: GAZARRA IA geral, sem contexto especializado.
+
+D) Todos disponíveis
+   "Analise este fechamento fiscal à luz da reforma tributária CBS/IBS."
+   Esperado: o roteador pode escolher até dois agentes relevantes; não os 26.
+
+E) Resumo do agente
+   Abra o seletor > "Gerar resumo com IA".
+   Na POC local, Qwen gera e armazena o resumo.
+   Quando LLM_PROVIDER=bedrock, o mesmo botão chama Claude e mantém o resumo em cache.
+
+OBSERVAÇÕES
+-----------
+- Não altera .env.
+- Não requer migration nova de banco.
+- Não conecta Claude automaticamente; prepara e utiliza o provedor configurado.
+- PDF visual nativo via Claude/Bedrock será a etapa de produção; nesta POC local páginas sem texto são explicitamente marcadas para não haver falsa leitura.

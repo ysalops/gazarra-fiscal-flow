@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.agents.registry import list_agents
+from app.agents.registry import get_agent, list_agents
 from app.core.config import settings
 from app.core.security import ensure_company_access, get_current_user
 from app.db.session import SessionLocal, get_db
@@ -20,6 +20,7 @@ from app.schemas.ai import (
     AIStatusResponse,
 )
 from app.services.ai.attachments import save_attachment
+from app.services.ai.agent_catalog import get_catalog_item, refresh_catalog_item
 from app.services.ai.conversation_store import (
     delete_conversation,
     get_conversation_with_messages,
@@ -61,17 +62,22 @@ def ai_status(user: User = Depends(get_current_user)):
 
 @router.get("/agents", response_model=List[AIAgentInfo])
 def ai_agents(user: User = Depends(get_current_user)):
-    return [
-        AIAgentInfo(
-            name=agent.name,
-            title=agent.title,
-            category=agent.category,
-            version=agent.version,
-            status=agent.status,
-            permissions=agent.permissions,
-        )
-        for agent in list_agents()
-    ]
+    return [AIAgentInfo(**get_catalog_item(agent)) for agent in list_agents()]
+
+
+@router.post("/agents/{agent_name}/summary", response_model=AIAgentInfo)
+def ai_agent_summary(
+    agent_name: str,
+    user: User = Depends(get_current_user),
+):
+    # O resumo é gerado uma vez e cacheado. Quando LLM_PROVIDER=bedrock,
+    # o próprio Claude lê a especificação do agente e produz o catálogo.
+    try:
+        item = refresh_catalog_item(agent_name)
+    except KeyError:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Agente não encontrado.")
+    return AIAgentInfo(**item)
 
 
 @router.post("/attachments", response_model=AIAttachmentResponse)

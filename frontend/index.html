@@ -509,6 +509,20 @@
           </div>
         </div>
 
+        <div class="ai-v162-agent-bar">
+          <details class="ai-v162-agent-mode" id="aiAgentModeMenu">
+            <summary id="aiAgentModeSummary">✦ Agentes: Automático</summary>
+            <div class="ai-v162-agent-mode-menu">
+              <label><input type="radio" name="aiAgentMode" value="auto" checked><span><strong>Automático</strong><small>A GAZARRA IA escolhe o agente mais aderente.</small></span></label>
+              <label><input type="radio" name="aiAgentMode" value="none"><span><strong>Nenhum agente</strong><small>Conversa geral, sem contexto especializado GAZARRA.</small></span></label>
+              <label><input type="radio" name="aiAgentMode" value="manual"><span><strong>Selecionar agentes</strong><small>Escolha 1 ou 2 especialistas para esta conversa.</small></span></label>
+              <label><input type="radio" name="aiAgentMode" value="all"><span><strong>Todos disponíveis</strong><small>Todo o catálogo fica elegível; o orquestrador usa só os relevantes.</small></span></label>
+              <button id="btnAiChooseAgents" type="button" class="ghost-button ai-v162-choose-button">Escolher 1 ou 2 agentes</button>
+            </div>
+          </details>
+          <div id="aiSelectedAgentChips" class="ai-v162-selected-agents"></div>
+        </div>
+
         <div id="aiAttachmentTray" class="ai-v16-attachment-tray hidden"></div>
 
         <div class="ai-v16-composer-wrap">
@@ -524,6 +538,23 @@
             <span>PDF · DOCX · XLSX · CSV · XML · imagens</span>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+  <div id="aiAgentPicker" class="ai-v162-agent-picker hidden" role="dialog" aria-modal="true" aria-labelledby="aiAgentPickerTitle">
+    <div class="ai-v162-agent-picker-card">
+      <div class="ai-v162-agent-picker-head">
+        <div><span>AGENTES GAZARRA</span><h3 id="aiAgentPickerTitle">Selecionar especialistas</h3><p>Escolha até 2 agentes. O resumo vem da especificação interna do agente e pode ser enriquecido pela LLM.</p></div>
+        <button id="btnAiAgentPickerClose" class="ai-icon-button" type="button" title="Fechar">×</button>
+      </div>
+      <div class="ai-v162-agent-picker-tools">
+        <input id="aiAgentSearch" type="search" placeholder="Buscar agente, categoria ou capacidade...">
+        <span id="aiAgentSelectionCount">0 de 2 selecionados</span>
+      </div>
+      <div id="aiAgentCards" class="ai-v162-agent-cards"></div>
+      <div class="ai-v162-agent-picker-footer">
+        <button id="btnAiAgentPickerCancel" class="ghost-button" type="button">Cancelar</button>
+        <button id="btnAiAgentPickerApply" class="primary-button" type="button">Usar agentes selecionados</button>
       </div>
     </div>
   </div>

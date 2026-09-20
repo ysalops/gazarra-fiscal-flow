@@ -1,0 +1,130 @@
+Fechamento Fiscal - Maio/2026
+INDUSTRIA E COMERCIO TRIANGULO L TDA
+Análise completa do faturamento, impostos e cargas tributárias do mês de maio de 
+2026, incluindo Simples Nacional, Substituição Tributária (ST), DIFAL e limites de receita.
+
+FATURAMENTO MAIO/2026
+Resumo do Faturamento — Maio/2026
+R$204.903,04
+Faturamento Sem ST
+Alíquota efetiva de 9,79% 
+R$20.044,13
+Valor DAS (Simples)
+Simples Nacional recolhido em maio/2026
+R$211.324,67
+Faturamento Com ST
+ST recolhida: R$6.421,63  (3,04% do faturamento)
+R$2.968,74
+DIFAL (327-7)
+ICMS Rec. Antecipado — Indústria 05/2026
+
+Comparativo Maio/2026 × Abril/2026
+Evolução dos principais tributos entre os dois períodos:
+DAS — Simples Nacional
+Maio/2026: R$20.044,13 
+Abril/2026: R$16.347,02 
+Variação: -18,44% 
+ST Recolhida
+Maio/2026: R$6.421,63 
+Abril/2026: R$8.397,64 
+Variação: -23,53%  — queda expressiva na 
+ST recolhida
+DIFAL Recolhido
+Maio/2026: R$2.968,74 
+Abril/2026: R$3.108,97 
+Variação: -4,72% 
+
+COMPARATIVO ANUAL
+Comparativo Maio/2026 × Maio/2025
+DAS — Simples Nacional
+Maio/2026:  R$20.044,13
+Maio/2025:  R$33.949,16
+V ariação:  -40,96%
+ST Recolhida
+Maio/2026:  R$6.421,63
+Maio/2025:  R$55.355,13
+V ariação:  -88,48% — redução expressiva
+DIFAL Recolhido
+Maio/2026:  R$2.968,74
+Maio/2025:  R$546,68
+V ariação:  442,88% — aumento significativo
+
+ST POR ESTADO/CFOP
+ST Recolhida em Maio/2026 — Por Estado
+Detalhamento das operações de Substituição Tributária (CFOP 5401002 / 6401002) — produto principal: Beverley Gin 900ml e Velvo Gin 800ml. Total de 
+151 caixas faturadas, valor total R$21.392,72, ST total R$6.423,63.
+Cliente UF Produto Valor Total Valor ST
+SL751 Distribuidora MG Beverley Gin 
+900ml
+R$6.077,00 R$1.123,08
+Nova Belém Comércio PA Beverley / Velvo 
+Gin
+R$4.014,92 R$1.314,67
+Império da Vitória ES Beverley / Velvo 
+Gin
+R$2.572,15 R$1.374,69
+Niágara Distribuidora ES Beverley / Velvo 
+Gin
+R$1.765,88 R$943,77
+Buriti / Disciplina MA Beverley / Velvo 
+Gin
+R$1.997,23 R$646,27
+
+DIFAL MAIO/2026
+Análise DIFAL — Antecipação ICMS Maio/2026
+Análise ST/DIFAL — Razão Social: Indústria e Comércio Triangulo Ltda (CNPJ 02.788.747/0001-90). Competência 05/2026. Total ICMS Antecipação: 
+R$2.968,74 sobre itens no valor de R$20.640,77.
+Fornecedor Valor Doc. Base Cálculo ICMS Antecipação
+HFBR Alimentos - ME (NF 8869) R$2.143,63 R$2.100,48 R$156,83
+SantosFlora Ind. e Com. (NF 82254) R$18.697,15 R$21.595,10 R$2.811,91
+Total Antecipação R$20.840,78 R$23.695,58 R$2.968,74
+
+Resumo Fiscal — Maio/2026
+Faturamento
+R$204.903 sem ST · R$211.324 com ST · 
+Alíquota efetiva 9,79%
+DAS Recolhido
+R$20.044,13 em Maio/2026 vs. R$33.949,16 
+em Maio/2025
+ST Recolhida
+R$6.421,63 (3,04%) — queda de -88,48% vs. 
+R$55.355 em Maio/2025
+DIFAL
+R$2.968,74 recolhidos — crescimento de 18,41× vs. Maio/2025
+Limite Simples
+18% utilizado (R$842.640) de R$4.800.000 — margem confortável
+
+HISTÓRICO 12 MESES
+Receita Bruta Sem ST — Últimos 12 Meses
+Total acumulado (12 meses): R$1.670.305,49 . O faturamento atingiu o pico em Junho/2025 (R$199.291,27) e o menor valor em Agosto/2025 
+(R$69.156,06), recuperando-se progressivamente até Maio/2026 (R$204.903,04).
+
+
+CARGA TRIBUTÁRIA
+Total de Impostos — DAS Últimos 12 Meses
+A alíquota efetiva do DAS oscilou entre 7,80%  (Dezembro) e 13,81%  (Junho), estabilizando-se em torno de 9,78%  em Maio/2026.
+
+RECEITA COM ST · ST RECOLHIDA
+Receita com ST e ST Recolhida — 12 Meses
+Receita bruta acumulada com ST (12 meses): R$1.914.263,36  | ST total recolhida: R$287.664,31  — alíquota acumulada de 15,03% 
+sobre faturamento com ST.
+A ST recolhida caiu drasticamente de patamares acima de R$40.000 (Jun–Dez/2025) para valores abaixo de R$13.000 a partir de 
+Janeiro/2026, refletindo mudança no perfil de vendas com ST.
+
+LIMITE SIMPLES NACIONAL
+Limite de Receita do Simples Nacional
+Receita acumulada até Maio/2026:R$842.640,40 
+Limite Simples Nacional: R$4.800.000,00
+Utilizado: 18% | Restante: 82%
+Sublimite ICMS/ISS: R$3.600.000,00
+Utilizado: 23% | Restante: 77%
+A empresa está bem dentro dos limites do Simples Nacional, com ampla margem disponível tanto para o limite geral quanto 
+para o sublimite de ICMS/ISS. 
+
+CERTIDÕES FEDERAL E EST ADUAL 
+
+
+CERTIDÕES MUNICIPAL E RELATÓRIO FISCAL
+
+
+OBRIGAÇÕES ACESSORIAS 

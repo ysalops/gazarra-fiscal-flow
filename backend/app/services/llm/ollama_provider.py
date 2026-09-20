@@ -34,7 +34,11 @@ class OllamaProvider(LLMProvider):
             "stream": stream,
             "think": settings.ollama_think,
             "keep_alive": settings.ollama_keep_alive,
-            "options": {"temperature": 0.2},
+            "options": {
+                "temperature": 0.15,
+                "num_ctx": 8192,
+                "num_predict": settings.ollama_num_predict,
+            },
         }
         if tools:
             payload["tools"] = tools
@@ -110,7 +114,7 @@ class OllamaProvider(LLMProvider):
         user_prompt: str,
         tools: list[dict],
         executor: ToolExecutor,
-        max_rounds: int = 3,
+        max_rounds: int = 2,
     ) -> tuple[str, list[str]]:
         """Loop de tool calling. Usado quando a pergunta realmente exige dados internos."""
         messages: list[dict] = [

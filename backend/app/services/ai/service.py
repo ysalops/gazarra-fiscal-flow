@@ -13,9 +13,10 @@ from app.agents.registry import AgentSpec
 from app.core.config import settings
 from app.models.entities import User
 from app.schemas.ai import AIChatContext, AIChatRequest, AIChatResponse
-from app.services.ai.agent_router import select_agent
+from app.services.ai.agent_router import GENERAL_AGENT, select_agents
 from app.services.ai.attachments import attachments_prompt_context, load_attachments
 from app.services.ai.context_builder import compact_context_for_prompt, get_fiscal_context
+from app.services.ai.fiscal_knowledge import direct_definition_answer, trusted_fiscal_context
 from app.services.ai.conversation_store import (
     add_message,
     conversation_history_for_prompt,
@@ -229,8 +230,8 @@ def _likely_internal_data_request(message: str) -> bool:
     return any(term in normalized for term in terms)
 
 
-def _requires_human_review(agent: AgentSpec, message: str) -> bool:
-    if agent.name not in CRITICAL_AGENTS:
+def _requires_human_review(agents: list[AgentSpec], message: str) -> bool:
+    if not any(agent.name in CRITICAL_AGENTS for agent in agents):
         return False
     normalized = _normalize_text(message)
     action_terms = (
@@ -240,28 +241,56 @@ def _requires_human_review(agent: AgentSpec, message: str) -> bool:
     return any(term in normalized for term in action_terms)
 
 
-def _build_system_prompt(agent: AgentSpec, source: str, environment: str) -> str:
-    specialist = ""
-    if agent.name != "gazarra-general":
-        specialist = f"\n\nAGENTE ESPECIALIZADO ATIVADO\n{agent.content}"
+def _build_system_prompt(agents: list[AgentSpec], source: str, environment: str) -> str:
+    specialist_parts: list[str] = []
+    for agent in agents:
+        if agent.name == "gazarra-general":
+            continue
+        # Limita a especificação por agente para manter a POC local responsiva.
+        content = agent.content[:5200]
+        specialist_parts.append(
+            f"AGENTE ESPECIALIZADO: {agent.title} ({agent.name})\n{content}"
+        )
+    specialist = ("\n\nAGENTES ESPECIALIZADOS ATIVADOS\n" + "\n\n---\n\n".join(specialist_parts)) if specialist_parts else ""
     return f"""
 Você é a GAZARRA IA, assistente de uso geral da equipe GAZARRA.
 
 Você pode conversar sobre assuntos gerais, explicar conceitos, ajudar a escrever textos, organizar ideias,
 analisar conteúdos enviados e apoiar tarefas profissionais. Seu diferencial é que, quando a pergunta envolve
-a operação da GAZARRA, você pode usar agentes especializados, arquivos anexados e ferramentas autorizadas.
+a operação da GAZARRA, você usa agentes especializados, arquivos anexados e ferramentas autorizadas.
+
+REGRAS DE CONFIABILIDADE
+- Nunca invente definições fiscais, números, clientes, documentos, fontes, cálculos, créditos, compensações ou fatos.
+- Se houver um bloco de REFERÊNCIAS FISCAIS CURADAS DA GAZARRA, ele prevalece para definições e siglas.
+- Diferencie explicitamente: (1) fato observado, (2) interpretação e (3) hipótese a verificar.
+- Não transforme correlação em causa. Não conclua estratégia comercial, problema de estoque, perda de faturamento,
+  direito a crédito, compensação ou abatimento se isso não estiver explícito na fonte ou em ferramenta autorizada.
+- Quando a evidência for insuficiente, diga exatamente o que falta para confirmar.
+- Em temas tributários sensíveis ou sujeitos a regra vigente, trate a resposta como apoio técnico e indique a necessidade
+  de validação da regra aplicável ao caso concreto quando pertinente.
 
 REGRAS PARA DADOS INTERNOS
-- Nunca invente dados de clientes, empresas, dashboard, documentos ou integrações.
-- Quando precisar de um dado interno e houver ferramenta apropriada, use a ferramenta.
+- Quando precisar de dado interno e houver ferramenta apropriada, use a ferramenta.
 - Resultados das ferramentas já respeitam as permissões do usuário.
 - Se faltar empresa, competência ou documento para uma consulta específica, peça apenas a informação que falta.
 - Nunca afirme ter transmitido obrigação, pago guia, alterado cadastro ou executado ação externa.
 - Dados de ambiente mock/demo devem ser tratados como demonstrativos.
 
+PROTOCOLO PARA DOCUMENTOS
+- Baseie os achados apenas no conteúdo efetivamente fornecido.
+- Alertas da VALIDAÇÃO NUMÉRICA DETERMINÍSTICA devem ser conferidos e destacados; não os descarte sem justificativa.
+- Páginas marcadas como LIMITAÇÃO VISUAL não foram lidas visualmente nesta POC local. Não conclua o conteúdo de certidões,
+  gráficos, QR codes, assinaturas ou imagens presentes nessas páginas.
+- Para análises, prefira a estrutura: "Achados objetivos", "Inconsistências encontradas", "Pontos de atenção" e "Itens a confirmar".
+- Se o conteúdo estiver marcado como amostra parcial, deixe claro que a análise está limitada aos trechos recebidos.
+- Não invente páginas, tabelas, valores ou explicações para números que não estejam no conteúdo enviado.
+
 REGRAS DE RESPOSTA
 - Responda em português do Brasil, salvo se o usuário pedir outro idioma.
 - Seja natural e útil. Não force o assunto fiscal quando a pergunta não for fiscal.
+- Use Markdown simples quando ajudar: títulos curtos, listas, negrito e tabelas pequenas.
+- Por padrão, seja conciso. Em análise de documento, priorize até 4 achados objetivos, 4 inconsistências/pontos de atenção
+  e 4 itens a confirmar, salvo se o usuário pedir uma análise detalhada.
 - Não exponha raciocínio interno, cadeia de pensamento ou detalhes técnicos desnecessários.
 - Se a pergunta pedir informação atual da internet, esclareça que este modelo local não possui navegação web nesta POC.
 
@@ -271,23 +300,49 @@ AMBIENTE: {environment}
 """.strip()
 
 
+def _resolve_agents(request: AIChatRequest, attachments: list[dict[str, Any]]) -> list[AgentSpec]:
+    # Compatibilidade: versões antigas enviavam apenas agent=<nome>.
+    if request.agent and request.agent not in {"", "auto"} and request.agent_mode == "auto" and not request.agents:
+        return select_agents(_routing_input(request, attachments), mode="manual", requested_agents=[request.agent])
+    return select_agents(
+        _routing_input(request, attachments),
+        mode=request.agent_mode,
+        requested_agents=request.agents,
+    )
+
+
 def _build_user_prompt(
     request: AIChatRequest,
     *,
     fiscal_context: Optional[str],
     attachment_context: str,
+    trusted_context: str = "",
 ) -> str:
     blocks: list[str] = []
     if request.company_id:
         blocks.append(f"EMPRESA EM CONTEXTO OPCIONAL: ID {request.company_id}")
     if request.competence:
         blocks.append(f"COMPETÊNCIA EM CONTEXTO OPCIONAL: {request.competence}")
+    if trusted_context:
+        blocks.append(trusted_context)
     if fiscal_context:
         blocks.append(f"CONTEXTO INTERNO ESTRUTURADO:\n{fiscal_context}")
     if attachment_context:
         blocks.append(f"ANEXOS DESTA MENSAGEM:\n{attachment_context}")
     blocks.append(f"PERGUNTA DO USUÁRIO:\n{request.message}")
     return "\n\n".join(blocks)
+
+
+def _routing_input(request: AIChatRequest, attachments: list[dict[str, Any]]) -> str:
+    """Inclui sinais do arquivo para o roteador escolher um agente especializado sem expor todo o documento."""
+    if not attachments:
+        return request.message
+    snippets: list[str] = [request.message]
+    for item in attachments[:3]:
+        snippets.append(str(item.get("filename") or ""))
+        if item.get("kind") != "image":
+            snippets.append((item.get("text") or "")[:4000])
+    return "\n".join(snippets)
 
 
 def _base_context(request: AIChatRequest) -> tuple[Optional[Dict[str, Any]], str, str, Dict[str, Any]]:
@@ -310,6 +365,17 @@ def _direct_answer(
     user: User,
     db: Session,
 ) -> Optional[dict[str, Any]]:
+    definition = direct_definition_answer(request.message)
+    if definition:
+        return {
+            "answer": definition,
+            "tools": [],
+            "company": {},
+            "competence": request.competence,
+            "source": "base fiscal curada",
+            "environment": "demo",
+        }
+
     if _is_company_list_request(request.message):
         result = execute_tool("list_companies", {}, user=user, db=db)
         return {
@@ -378,7 +444,7 @@ def _response(
     answer: str,
     conversation_id: Optional[str],
     request: AIChatRequest,
-    agent: AgentSpec,
+    agents: list[AgentSpec],
     provider_name: str,
     model_name: Optional[str],
     demo_mode: bool,
@@ -391,25 +457,32 @@ def _response(
     warning: Optional[str] = None,
 ) -> AIChatResponse:
     company = company or {}
+    primary = agents[0] if agents else GENERAL_AGENT
     sources: list[str] = []
+    if source == "base fiscal curada":
+        sources.append("Base fiscal curada GAZARRA")
     if tools_used == ["list_companies"]:
         sources.append("Cadastro de empresas e permissões")
     if "get_fiscal_dashboard" in tools_used:
         sources.append(f"Dashboard Fiscal ({source})")
     sources.extend(f"Arquivo: {name}" for name in attachment_names)
-    if agent.name != "gazarra-general":
-        sources.append(f"Agente: {agent.name}")
+    for agent in agents:
+        if agent.name != "gazarra-general":
+            sources.append(f"Agente: {agent.name}")
     sources.extend(f"Tool: {tool}" for tool in tools_used)
 
     return AIChatResponse(
         answer=answer,
         conversation_id=conversation_id,
-        agent_used=agent.name,
-        agent_title=agent.title,
+        agent_used=primary.name,
+        agent_title=primary.title if len(agents) == 1 else " + ".join(agent.title for agent in agents),
+        agents_used=[agent.name for agent in agents],
+        agent_titles=[agent.title for agent in agents],
+        agent_mode=request.agent_mode,
         provider=provider_name,
         model=model_name,
         demo_mode=demo_mode,
-        requires_human_review=_requires_human_review(agent, request.message),
+        requires_human_review=_requires_human_review(agents, request.message),
         context=AIChatContext(
             company_id=company.get("id") or request.company_id,
             company_name=company.get("name"),
@@ -417,7 +490,7 @@ def _response(
             source=source,
             environment=environment,
         ),
-        sources_used=sources,
+        sources_used=list(dict.fromkeys(sources)),
         generated_at=datetime.now(timezone.utc),
         warning=warning,
     )
@@ -428,14 +501,15 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
     conversation = get_or_create_conversation(db, user, request.conversation_id, request.message)
     add_message(db, conversation, role="user", content=request.message)
 
-    agent = select_agent(request.message, request.agent)
+    attachments = load_attachments(request.attachments, user.id)
+    attachment_names = [item.get("filename", "arquivo") for item in attachments]
+    agents = _resolve_agents(request, attachments)
     provider_name, model_name, configured = _provider_metadata()
     demo_mode = provider_name == "demo" or not configured
     warning: Optional[str] = None
-    attachments = load_attachments(request.attachments, user.id)
-    attachment_names = [item.get("filename", "arquivo") for item in attachments]
 
-    direct = _direct_answer(request, user=user, db=db)
+    # Modo sem agentes é conversa geral: não injeta fast-paths, dados internos ou base curada.
+    direct = _direct_answer(request, user=user, db=db) if request.agent_mode in {"auto", "all"} else None
     tools_used: list[str] = []
     if direct:
         answer = direct["answer"]
@@ -445,7 +519,8 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
         company = direct["company"]
         competence = direct["competence"]
     else:
-        fiscal, source, environment, company = _base_context(request)
+        use_internal_context = request.agent_mode != "none"
+        fiscal, source, environment, company = _base_context(request) if use_internal_context else (None, "nenhuma", "demo", {})
         competence = request.competence
         provider = get_llm_provider() if configured else None
         if provider is None:
@@ -456,13 +531,14 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
             demo_mode = True
             warning = "Nenhum provedor de LLM ativo."
         else:
-            system_prompt = _build_system_prompt(agent, source, environment)
+            system_prompt = _build_system_prompt(agents, source, environment)
             user_prompt = _build_user_prompt(
                 request,
                 fiscal_context=compact_context_for_prompt(fiscal) if fiscal else None,
                 attachment_context=attachments_prompt_context(attachments),
+                trusted_context=trusted_fiscal_context(request.message) if use_internal_context else "",
             )
-            if provider_name == "ollama" and _likely_internal_data_request(request.message) and not attachments:
+            if provider_name == "ollama" and use_internal_context and _likely_internal_data_request(request.message) and not attachments:
                 answer, tools_used = provider.chat_with_tools(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
@@ -470,11 +546,11 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
                     executor=lambda name, arguments: execute_tool(name, arguments, user=user, db=db),
                 )
             else:
-                # Providers atuais recebem o histórico indiretamente apenas no streaming.
                 history_text = ""
-                if history:
+                # Primeira análise de documento não precisa carregar histórico antigo.
+                if history and not attachments:
                     history_text = "\n\nHISTÓRICO RECENTE:\n" + "\n".join(
-                        f"{item['role']}: {item['content']}" for item in history[-8:]
+                        f"{item['role']}: {item['content']}" for item in history[-6:]
                     )
                 answer = provider.analyze(system_prompt, user_prompt + history_text)
 
@@ -482,7 +558,7 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
         answer=answer,
         conversation_id=conversation.id,
         request=request,
-        agent=agent,
+        agents=agents,
         provider_name=provider_name,
         model_name=model_name,
         demo_mode=demo_mode,
@@ -495,12 +571,8 @@ def chat(request: AIChatRequest, *, user: User, db: Session) -> AIChatResponse:
         warning=warning,
     )
     add_message(
-        db,
-        conversation,
-        role="assistant",
-        content=response.answer,
-        agent=response.agent_used,
-        metadata={"sources": response.sources_used, "provider": response.provider},
+        db, conversation, role="assistant", content=response.answer, agent=response.agent_used,
+        metadata={"sources": response.sources_used, "provider": response.provider, "agents": response.agents_used},
     )
     return response
 
@@ -519,21 +591,33 @@ def stream_chat_events(request: AIChatRequest, *, user: User, db: Session) -> It
     conversation = get_or_create_conversation(db, user, request.conversation_id, request.message)
     add_message(db, conversation, role="user", content=request.message)
 
-    agent = select_agent(request.message, request.agent)
-    provider_name, model_name, configured = _provider_metadata()
-    demo_mode = provider_name == "demo" or not configured
     attachments = load_attachments(request.attachments, user.id)
     attachment_names = [item.get("filename", "arquivo") for item in attachments]
     images = [item.get("image_base64") for item in attachments if item.get("image_base64")]
+    agents = _resolve_agents(request, attachments)
+    primary = agents[0] if agents else GENERAL_AGENT
+    provider_name, model_name, configured = _provider_metadata()
+    demo_mode = provider_name == "demo" or not configured
 
     yield _json_event(
         "start",
         conversation_id=conversation.id,
-        agent_used=agent.name,
-        agent_title=agent.title,
+        agent_used=primary.name,
+        agent_title=primary.title if len(agents) == 1 else " + ".join(agent.title for agent in agents),
+        agents_used=[agent.name for agent in agents],
+        agent_titles=[agent.title for agent in agents],
+        agent_mode=request.agent_mode,
     )
+    if attachments:
+        yield _json_event("status", message="Documento já extraído. Validando números e estrutura...")
+        validation_count = sum(int((item.get("document_analysis") or {}).get("validation_count") or 0) for item in attachments)
+        if validation_count:
+            yield _json_event("status", message=f"{validation_count} possível(is) inconsistência(s) numérica(s) detectada(s).")
+    specialist_titles = [agent.title for agent in agents if agent.name != "gazarra-general"]
+    if specialist_titles:
+        yield _json_event("status", message="Acionando " + " + ".join(specialist_titles) + "...")
 
-    direct = _direct_answer(request, user=user, db=db)
+    direct = _direct_answer(request, user=user, db=db) if request.agent_mode in {"auto", "all"} else None
     tools_used: list[str] = []
     warning: Optional[str] = None
     answer_parts: list[str] = []
@@ -548,9 +632,10 @@ def stream_chat_events(request: AIChatRequest, *, user: User, db: Session) -> It
         for chunk in _text_chunks(answer):
             answer_parts.append(chunk)
             yield _json_event("delta", text=chunk)
-            time.sleep(0.012)
+            time.sleep(0.006)
     else:
-        fiscal, source, environment, company = _base_context(request)
+        use_internal_context = request.agent_mode != "none"
+        fiscal, source, environment, company = _base_context(request) if use_internal_context else (None, "nenhuma", "demo", {})
         competence = request.competence
         provider = get_llm_provider() if configured else None
         if provider is None:
@@ -561,16 +646,16 @@ def stream_chat_events(request: AIChatRequest, *, user: User, db: Session) -> It
                 answer_parts.append(chunk)
                 yield _json_event("delta", text=chunk)
         else:
-            system_prompt = _build_system_prompt(agent, source, environment)
+            system_prompt = _build_system_prompt(agents, source, environment)
             user_prompt = _build_user_prompt(
                 request,
                 fiscal_context=compact_context_for_prompt(fiscal) if fiscal else None,
                 attachment_context=attachments_prompt_context(attachments),
+                trusted_context=trusted_fiscal_context(request.message) if use_internal_context else "",
             )
+            yield _json_event("status", message="Gerando resposta...")
 
-            # Para perguntas internas complexas, deixamos o agente/tool resolver primeiro.
-            # Perguntas gerais e análise de anexos usam streaming real do Ollama.
-            if provider_name == "ollama" and _likely_internal_data_request(request.message) and not attachments:
+            if provider_name == "ollama" and use_internal_context and _likely_internal_data_request(request.message) and not attachments:
                 answer, tools_used = provider.chat_with_tools(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
@@ -580,13 +665,12 @@ def stream_chat_events(request: AIChatRequest, *, user: User, db: Session) -> It
                 for chunk in _text_chunks(answer):
                     answer_parts.append(chunk)
                     yield _json_event("delta", text=chunk)
-                    time.sleep(0.008)
+                    time.sleep(0.005)
             elif provider_name == "ollama" and hasattr(provider, "stream_analyze"):
+                # Em análise de arquivo, evitar re-enviar histórico inteiro reduz latência e contaminação de contexto.
+                stream_history = [] if attachments else history[-5:]
                 for chunk in provider.stream_analyze(
-                    system_prompt,
-                    user_prompt,
-                    history=history,
-                    images=images,
+                    system_prompt, user_prompt, history=stream_history, images=images,
                 ):
                     answer_parts.append(chunk)
                     yield _json_event("delta", text=chunk)
@@ -595,31 +679,17 @@ def stream_chat_events(request: AIChatRequest, *, user: User, db: Session) -> It
                 for chunk in _text_chunks(answer):
                     answer_parts.append(chunk)
                     yield _json_event("delta", text=chunk)
-                    time.sleep(0.008)
+                    time.sleep(0.005)
 
     answer = "".join(answer_parts).strip()
     response = _response(
-        answer=answer,
-        conversation_id=conversation.id,
-        request=request,
-        agent=agent,
-        provider_name=provider_name,
-        model_name=model_name,
-        demo_mode=demo_mode,
-        source=source,
-        environment=environment,
-        company=company,
-        competence=competence,
-        tools_used=tools_used,
-        attachment_names=attachment_names,
-        warning=warning,
+        answer=answer, conversation_id=conversation.id, request=request, agents=agents,
+        provider_name=provider_name, model_name=model_name, demo_mode=demo_mode, source=source,
+        environment=environment, company=company, competence=competence, tools_used=tools_used,
+        attachment_names=attachment_names, warning=warning,
     )
     add_message(
-        db,
-        conversation,
-        role="assistant",
-        content=response.answer,
-        agent=response.agent_used,
-        metadata={"sources": response.sources_used, "provider": response.provider},
+        db, conversation, role="assistant", content=response.answer, agent=response.agent_used,
+        metadata={"sources": response.sources_used, "provider": response.provider, "agents": response.agents_used},
     )
     yield _json_event("done", data=response.model_dump(mode="json"))

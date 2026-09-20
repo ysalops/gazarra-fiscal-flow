@@ -3325,6 +3325,17 @@ const btnAiAttach = document.getElementById("btnAiAttach");
 const aiFileInput = document.getElementById("aiFileInput");
 const btnAiClear = document.getElementById("btnAiClear");
 const btnAiRefreshHistory = document.getElementById("btnAiRefreshHistory");
+const aiAgentModeMenu = document.getElementById("aiAgentModeMenu");
+const aiAgentModeSummary = document.getElementById("aiAgentModeSummary");
+const btnAiChooseAgents = document.getElementById("btnAiChooseAgents");
+const aiSelectedAgentChips = document.getElementById("aiSelectedAgentChips");
+const aiAgentPicker = document.getElementById("aiAgentPicker");
+const aiAgentCards = document.getElementById("aiAgentCards");
+const aiAgentSearch = document.getElementById("aiAgentSearch");
+const aiAgentSelectionCount = document.getElementById("aiAgentSelectionCount");
+const btnAiAgentPickerClose = document.getElementById("btnAiAgentPickerClose");
+const btnAiAgentPickerCancel = document.getElementById("btnAiAgentPickerCancel");
+const btnAiAgentPickerApply = document.getElementById("btnAiAgentPickerApply");
 const fiscalAiInput = document.getElementById("fiscalAiInput");
 const btnFiscalAiSend = document.getElementById("btnFiscalAiSend");
 
@@ -3332,6 +3343,9 @@ let aiActiveConversationId = null;
 let aiPinnedCompanyId = null;
 let aiPendingAttachments = [];
 let aiStreamingText = "";
+let aiAgentMode = "auto";
+let aiSelectedAgentNames = [];
+let aiAgentDraftSelection = [];
 
 if (aiCompanySelect) {
   aiCompanySelect.addEventListener("change", () => {
@@ -3344,6 +3358,27 @@ if (btnAiSend) btnAiSend.addEventListener("click", sendAiMessage);
 if (btnAiAttach) btnAiAttach.addEventListener("click", () => aiFileInput?.click());
 if (btnAiClear) btnAiClear.addEventListener("click", clearAiConversation);
 if (btnAiRefreshHistory) btnAiRefreshHistory.addEventListener("click", loadAiConversationHistory);
+
+document.querySelectorAll('input[name="aiAgentMode"]').forEach((radio) => {
+  radio.addEventListener("change", () => {
+    aiAgentMode = radio.value;
+    if (aiAgentMode === "manual" && !aiSelectedAgentNames.length) {
+      openAiAgentPicker();
+    } else {
+      renderAiAgentModeUI();
+    }
+  });
+});
+if (btnAiChooseAgents) btnAiChooseAgents.addEventListener("click", openAiAgentPicker);
+if (btnAiAgentPickerClose) btnAiAgentPickerClose.addEventListener("click", closeAiAgentPicker);
+if (btnAiAgentPickerCancel) btnAiAgentPickerCancel.addEventListener("click", closeAiAgentPicker);
+if (btnAiAgentPickerApply) btnAiAgentPickerApply.addEventListener("click", applyAiAgentSelection);
+if (aiAgentSearch) aiAgentSearch.addEventListener("input", () => renderAiAgentCards(aiAgentSearch.value));
+if (aiAgentPicker) {
+  aiAgentPicker.addEventListener("click", (event) => {
+    if (event.target === aiAgentPicker) closeAiAgentPicker();
+  });
+}
 
 if (aiFileInput) {
   aiFileInput.addEventListener("change", async () => {
@@ -3392,10 +3427,12 @@ async function initializeGazarraAI() {
   gazarraAiInitialized = true;
   await Promise.all([
     loadAiStatus(),
+    loadAiAgents(),
     loadAiCompanies(),
     loadAiConversationHistory()
   ]);
   renderAiContextNote();
+  renderAiAgentModeUI();
 }
 
 async function loadAiStatus() {
@@ -3416,6 +3453,173 @@ async function loadAiStatus() {
   } catch (error) {
     const provider = document.getElementById("aiProviderBadge");
     if (provider) provider.textContent = "Provedor indisponível";
+  }
+}
+
+async function loadAiAgents() {
+  try {
+    const response = await fetch(`${API}/ai/agents`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Erro ao carregar agentes.");
+    gazarraAiAgents = Array.isArray(data) ? data : [];
+    renderAiAgentCards();
+  } catch (_) {
+    gazarraAiAgents = [];
+  }
+}
+
+function renderAiAgentModeUI() {
+  const labels = {
+    auto: "✦ Agentes: Automático",
+    none: "Agentes: Nenhum",
+    all: "✦ Agentes: Todos disponíveis",
+    manual: aiSelectedAgentNames.length
+      ? `✦ Agentes: ${aiSelectedAgentNames.length} selecionado${aiSelectedAgentNames.length > 1 ? "s" : ""}`
+      : "✦ Agentes: Selecionar..."
+  };
+  if (aiAgentModeSummary) aiAgentModeSummary.textContent = labels[aiAgentMode] || labels.auto;
+  document.querySelectorAll('input[name="aiAgentMode"]').forEach((radio) => {
+    radio.checked = radio.value === aiAgentMode;
+  });
+  if (btnAiChooseAgents) btnAiChooseAgents.classList.toggle("hidden", aiAgentMode !== "manual");
+  if (aiSelectedAgentChips) {
+    const selected = gazarraAiAgents.filter((agent) => aiSelectedAgentNames.includes(agent.name));
+    aiSelectedAgentChips.innerHTML = aiAgentMode === "manual"
+      ? selected.map((agent) => `<span title="${escapeHtml(agent.summary || "")}">${escapeHtml(agent.title)} <button type="button" data-remove-selected-agent="${escapeHtml(agent.name)}">×</button></span>`).join("")
+      : "";
+    aiSelectedAgentChips.querySelectorAll("[data-remove-selected-agent]").forEach((button) => {
+      button.addEventListener("click", () => {
+        aiSelectedAgentNames = aiSelectedAgentNames.filter((name) => name !== button.dataset.removeSelectedAgent);
+        if (!aiSelectedAgentNames.length) aiAgentMode = "auto";
+        renderAiAgentModeUI();
+      });
+    });
+  }
+}
+
+function openAiAgentPicker() {
+  if (!aiAgentPicker) return;
+  aiAgentDraftSelection = [...aiSelectedAgentNames];
+  if (aiAgentSearch) aiAgentSearch.value = "";
+  renderAiAgentCards();
+  aiAgentPicker.classList.remove("hidden");
+  document.body.classList.add("ai-modal-open");
+}
+
+function closeAiAgentPicker() {
+  aiAgentPicker?.classList.add("hidden");
+  document.body.classList.remove("ai-modal-open");
+  if (aiAgentMode === "manual" && !aiSelectedAgentNames.length) {
+    aiAgentMode = "auto";
+    renderAiAgentModeUI();
+  }
+}
+
+function applyAiAgentSelection() {
+  if (!aiAgentDraftSelection.length) {
+    aiAgentMode = "auto";
+    aiSelectedAgentNames = [];
+  } else {
+    aiAgentMode = "manual";
+    aiSelectedAgentNames = [...aiAgentDraftSelection].slice(0, 2);
+  }
+  renderAiAgentModeUI();
+  closeAiAgentPicker();
+  aiAgentModeMenu?.removeAttribute("open");
+}
+
+function renderAiAgentCards(search = "") {
+  if (!aiAgentCards) return;
+  const query = (search || "").trim().toLocaleLowerCase("pt-BR");
+  const visible = gazarraAiAgents.filter((agent) => {
+    if (!query) return true;
+    const haystack = [agent.title, agent.category, agent.summary, ...(agent.capabilities || []), ...(agent.recommended_for || [])].join(" ").toLocaleLowerCase("pt-BR");
+    return haystack.includes(query);
+  });
+  if (!visible.length) {
+    aiAgentCards.innerHTML = `<div class="ai-v162-agent-empty">Nenhum agente encontrado.</div>`;
+    return;
+  }
+  aiAgentCards.innerHTML = visible.map((agent) => {
+    const checked = aiAgentDraftSelection.includes(agent.name);
+    const disabled = !checked && aiAgentDraftSelection.length >= 2;
+    const capabilities = (agent.capabilities || []).slice(0, 4).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+    return `
+      <article class="ai-v162-agent-card ${checked ? "selected" : ""}" data-agent-card="${escapeHtml(agent.name)}">
+        <label class="ai-v162-agent-card-main">
+          <input type="checkbox" data-agent-check="${escapeHtml(agent.name)}" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}>
+          <div>
+            <small>${escapeHtml(agent.category || "Agente GAZARRA")}</small>
+            <strong>${escapeHtml(agent.title)}</strong>
+            <p>${escapeHtml(agent.summary || "Especificação interna carregada.")}</p>
+          </div>
+        </label>
+        <div class="ai-v162-agent-tags">${capabilities}</div>
+        <div class="ai-v162-agent-card-actions">
+          <button type="button" data-agent-details="${escapeHtml(agent.name)}">Ver detalhes</button>
+          <button type="button" data-agent-ai-summary="${escapeHtml(agent.name)}">${agent.summary_source === "spec" ? "Gerar resumo com IA" : "Resumo pela IA ✓"}</button>
+        </div>
+        <div class="ai-v162-agent-detail hidden" data-agent-detail-body="${escapeHtml(agent.name)}"></div>
+      </article>`;
+  }).join("");
+
+  aiAgentCards.querySelectorAll("[data-agent-check]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const name = checkbox.dataset.agentCheck;
+      if (checkbox.checked) {
+        if (aiAgentDraftSelection.length >= 2) { checkbox.checked = false; return; }
+        aiAgentDraftSelection.push(name);
+      } else {
+        aiAgentDraftSelection = aiAgentDraftSelection.filter((item) => item !== name);
+      }
+      renderAiAgentCards(aiAgentSearch?.value || "");
+      updateAiAgentSelectionCount();
+    });
+  });
+  aiAgentCards.querySelectorAll("[data-agent-details]").forEach((button) => {
+    button.addEventListener("click", () => toggleAiAgentDetails(button.dataset.agentDetails));
+  });
+  aiAgentCards.querySelectorAll("[data-agent-ai-summary]").forEach((button) => {
+    button.addEventListener("click", () => refreshAiAgentSummary(button.dataset.agentAiSummary, button));
+  });
+  updateAiAgentSelectionCount();
+}
+
+function updateAiAgentSelectionCount() {
+  if (aiAgentSelectionCount) aiAgentSelectionCount.textContent = `${aiAgentDraftSelection.length} de 2 selecionados`;
+}
+
+function toggleAiAgentDetails(name) {
+  const agent = gazarraAiAgents.find((item) => item.name === name);
+  const body = aiAgentCards?.querySelector(`[data-agent-detail-body="${CSS.escape(name)}"]`);
+  if (!agent || !body) return;
+  const currentlyHidden = body.classList.contains("hidden");
+  if (!currentlyHidden) { body.classList.add("hidden"); return; }
+  body.innerHTML = `
+    <div><strong>Quando usar</strong>${(agent.recommended_for || []).map((item) => `<p>• ${escapeHtml(item)}</p>`).join("") || "<p>Consulte o resumo do agente.</p>"}</div>
+    <div><strong>Pode utilizar</strong>${(agent.capabilities || []).map((item) => `<p>• ${escapeHtml(item)}</p>`).join("")}</div>
+    <div><strong>Revisão humana</strong><p>${agent.human_review ? "Indicada para decisões ou ações sensíveis." : "Não indicada por padrão; depende do caso concreto."}</p></div>`;
+  body.classList.remove("hidden");
+}
+
+async function refreshAiAgentSummary(name, button) {
+  if (!name || !button) return;
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Lendo especificação...";
+  try {
+    const response = await fetch(`${API}/ai/agents/${encodeURIComponent(name)}/summary`, { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Não foi possível gerar o resumo.");
+    const index = gazarraAiAgents.findIndex((item) => item.name === name);
+    if (index >= 0) gazarraAiAgents[index] = data;
+    renderAiAgentCards(aiAgentSearch?.value || "");
+    renderAiAgentModeUI();
+  } catch (error) {
+    button.textContent = original;
+    button.title = error.message;
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -3508,7 +3712,7 @@ async function loadAiConversation(conversationId) {
 }
 
 async function uploadAiFiles(files) {
-  setAiBusy(true, "Anexando...");
+  setAiBusy(true, "Extraindo e validando arquivo...");
   try {
     for (const file of files.slice(0, 8 - aiPendingAttachments.length)) {
       const form = new FormData();
@@ -3533,7 +3737,7 @@ function renderAiAttachmentTray() {
   tray.innerHTML = aiPendingAttachments.map((item, index) => `
     <div class="ai-v16-attachment-chip">
       <span>${item.kind === "image" ? "▧" : "▤"}</span>
-      <div><strong>${escapeHtml(item.filename)}</strong><small>${formatFileSize(item.size)}</small></div>
+      <div><strong>${escapeHtml(item.filename)}</strong><small>${[formatFileSize(item.size), item.page_count ? `${item.page_count} pág.` : "", item.validation_count ? `${item.validation_count} alerta${item.validation_count > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")}</small></div>
       <button type="button" data-remove-ai-attachment="${index}" title="Remover">×</button>
     </div>
   `).join("");
@@ -3573,6 +3777,8 @@ async function sendAiMessage() {
         competence: null,
         message: message || "Analise os arquivos anexados.",
         agent: "auto",
+        agent_mode: aiAgentMode,
+        agents: aiAgentMode === "manual" ? aiSelectedAgentNames : [],
         conversation_id: aiActiveConversationId,
         attachments: attachmentSnapshot.map((item) => item.id)
       })
@@ -3601,8 +3807,11 @@ async function sendAiMessage() {
         if (event.type === "start") {
           aiActiveConversationId = event.conversation_id || aiActiveConversationId;
           setStreamingLabel(streamBubble, event.agent_title || "GAZARRA IA");
+        } else if (event.type === "status") {
+          setStreamingStatus(streamBubble, event.message || "Analisando...");
         } else if (event.type === "delta") {
           aiStreamingText += event.text || "";
+          setStreamingStatus(streamBubble, "");
           updateStreamingBubble(streamBubble, aiStreamingText);
         } else if (event.type === "done") {
           finalData = event.data;
@@ -3637,6 +3846,7 @@ function appendAiStreamingMessage() {
   bubble.className = "ai-message ai-message-assistant ai-v16-streaming";
   bubble.innerHTML = `
     <div class="ai-message-label">GAZARRA IA</div>
+    <div class="ai-stream-status"><span class="ai-status-dot"></span><span>Pensando...</span></div>
     <div class="ai-answer-text ai-stream-text"><span class="ai-cursor"></span></div>
     <details class="ai-message-details hidden"><summary>Ver fontes e detalhes</summary><div></div></details>
   `;
@@ -3650,15 +3860,23 @@ function setStreamingLabel(bubble, label) {
   if (el) el.textContent = label;
 }
 
+function setStreamingStatus(bubble, message) {
+  const el = bubble?.querySelector(".ai-stream-status");
+  if (!el) return;
+  const text = el.querySelector("span:last-child");
+  if (text) text.textContent = message || "";
+  el.classList.toggle("hidden", !message);
+}
+
 function updateStreamingBubble(bubble, text) {
   const el = bubble?.querySelector(".ai-stream-text");
   if (!el) return;
-  el.textContent = text;
-  el.insertAdjacentHTML("beforeend", `<span class="ai-cursor"></span>`);
+  el.innerHTML = `${formatAiText(text)}<span class="ai-cursor"></span>`;
   scrollAiConversation();
 }
 
 function finalizeStreamingBubble(bubble, text, metadata) {
+  setStreamingStatus(bubble, "");
   const el = bubble?.querySelector(".ai-stream-text");
   if (el) el.innerHTML = formatAiText(text);
   if (metadata) {
@@ -3774,6 +3992,9 @@ function clearAiConversation() {
   aiActiveConversationId = null;
   aiPendingAttachments = [];
   aiPinnedCompanyId = null;
+  aiAgentMode = "auto";
+  aiSelectedAgentNames = [];
+  renderAiAgentModeUI();
   if (aiCompanySelect) aiCompanySelect.value = "";
   renderAiAttachmentTray();
   renderAiContextNote();
@@ -3795,15 +4016,108 @@ function clearAiConversation() {
   loadAiConversationHistory();
 }
 
-function formatAiText(value) {
-  let safe = escapeHtml(value || "");
-  safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
-  return safe
-    .split("\n\n")
-    .map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`)
-    .join("");
+function formatAiInline(value) {
+  let text = value || "";
+  text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  return text;
 }
+
+function formatAiText(value) {
+  const safe = escapeHtml(value || "").replace(/\r\n/g, "\n");
+  const lines = safe.split("\n");
+  const html = [];
+  let paragraph = [];
+  let listType = null;
+  let inCode = false;
+  let codeLines = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    html.push(`<p>${paragraph.map(formatAiInline).join("<br>")}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = null;
+  };
+  const openList = (type) => {
+    if (listType === type) return;
+    closeList();
+    flushParagraph();
+    html.push(`<${type}>`);
+    listType = type;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    if (line.trim().startsWith("```")) {
+      flushParagraph();
+      closeList();
+      if (inCode) {
+        html.push(`<pre><code>${codeLines.join("\n")}</code></pre>`);
+        codeLines = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(rawLine);
+      continue;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      closeList();
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      closeList();
+      const level = Math.min(4, heading[1].length + 1);
+      html.push(`<h${level}>${formatAiInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      openList("ul");
+      html.push(`<li>${formatAiInline(bullet[1])}</li>`);
+      continue;
+    }
+
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (numbered) {
+      openList("ol");
+      html.push(`<li>${formatAiInline(numbered[1])}</li>`);
+      continue;
+    }
+
+    if (line.startsWith("&gt; ")) {
+      flushParagraph();
+      closeList();
+      html.push(`<blockquote>${formatAiInline(line.slice(5))}</blockquote>`);
+      continue;
+    }
+
+    closeList();
+    paragraph.push(line);
+  }
+
+  if (inCode) html.push(`<pre><code>${codeLines.join("\n")}</code></pre>`);
+  flushParagraph();
+  closeList();
+  return html.join("");
+}
+
 
 
 async function initializeAdmin() {

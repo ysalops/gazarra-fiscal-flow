@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import base64
-import csv
-import io
 import json
 from pathlib import Path
 import re
@@ -11,9 +9,13 @@ from typing import Any
 
 from fastapi import HTTPException, UploadFile
 
+from app.services.ai.document_analysis import analyze_document_text, validation_prompt_block
+
 
 UPLOAD_ROOT = Path("/app/data/ai_uploads")
 MAX_FILE_SIZE = 12 * 1024 * 1024
+MAX_STORED_TEXT = 500_000
+MAX_PROMPT_TEXT = 22_000
 ALLOWED_EXTENSIONS = {
     ".pdf", ".docx", ".xlsx", ".csv", ".txt", ".md", ".xml",
     ".json", ".png", ".jpg", ".jpeg", ".webp",
@@ -42,7 +44,12 @@ def _extract_text(path: Path, extension: str) -> str:
         if extension == ".pdf":
             from pypdf import PdfReader
             reader = PdfReader(str(path))
-            return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+            pages: list[str] = []
+            for index, page in enumerate(reader.pages, start=1):
+                text = (page.extract_text() or "").strip()
+                if text:
+                    pages.append(f"[Página {index}]\n{text}")
+            return "\n\n".join(pages)
 
         if extension == ".docx":
             from docx import Document
@@ -64,6 +71,26 @@ def _extract_text(path: Path, extension: str) -> str:
         return f"[Não foi possível extrair o conteúdo textual automaticamente: {exc}]"
 
     return ""
+
+
+def _compact_for_prompt(text: str, limit: int = MAX_PROMPT_TEXT) -> tuple[str, bool]:
+    """Mantém amostras do início, meio e fim para reduzir latência no modelo local."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text, False
+
+    first = int(limit * 0.40)
+    middle = int(limit * 0.30)
+    last = limit - first - middle
+    middle_start = max(0, (len(text) // 2) - (middle // 2))
+    compact = (
+        text[:first]
+        + "\n\n[... trecho intermediário omitido para desempenho local ...]\n\n"
+        + text[middle_start:middle_start + middle]
+        + "\n\n[... trecho intermediário omitido para desempenho local ...]\n\n"
+        + text[-last:]
+    )
+    return compact, True
 
 
 async def save_attachment(file: UploadFile, user_id: int) -> dict[str, Any]:
@@ -93,7 +120,16 @@ async def save_attachment(file: UploadFile, user_id: int) -> dict[str, Any]:
     extracted_text = "" if extension in IMAGE_EXTENSIONS else _extract_text(path, extension)
     text_path = user_dir / f"{attachment_id}.txt"
     if extracted_text:
-        text_path.write_text(extracted_text[:500_000], encoding="utf-8")
+        text_path.write_text(extracted_text[:MAX_STORED_TEXT], encoding="utf-8")
+
+    document_analysis = analyze_document_text(extracted_text, extension) if extracted_text else {
+        "page_count": None, "visual_pages": [], "validation_findings": [], "validation_count": 0
+    }
+    analysis_path = user_dir / f"{attachment_id}.analysis.json"
+    analysis_path.write_text(
+        json.dumps(document_analysis, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     metadata = {
         "id": attachment_id,
@@ -105,6 +141,10 @@ async def save_attachment(file: UploadFile, user_id: int) -> dict[str, Any]:
         "kind": "image" if extension in IMAGE_EXTENSIONS else "document",
         "stored_name": stored_name,
         "has_text": bool(extracted_text),
+        "text_chars": min(len(extracted_text), MAX_STORED_TEXT),
+        "page_count": document_analysis.get("page_count"),
+        "visual_pages": document_analysis.get("visual_pages") or [],
+        "validation_count": int(document_analysis.get("validation_count") or 0),
     }
     (user_dir / f"{attachment_id}.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
@@ -127,11 +167,24 @@ def load_attachments(attachment_ids: list[str], user_id: int) -> list[dict[str, 
             continue
 
         text_path = user_dir / f"{attachment_id}.txt"
-        metadata["text"] = (
-            text_path.read_text(encoding="utf-8", errors="replace")[:120_000]
+        full_text = (
+            text_path.read_text(encoding="utf-8", errors="replace")
             if text_path.exists()
             else ""
         )
+        prompt_text, truncated = _compact_for_prompt(full_text)
+        metadata["text"] = prompt_text
+        metadata["prompt_text_truncated"] = truncated
+        metadata["text_chars"] = len(full_text)
+        analysis_path = user_dir / f"{attachment_id}.analysis.json"
+        if analysis_path.exists():
+            try:
+                metadata["document_analysis"] = json.loads(analysis_path.read_text(encoding="utf-8"))
+            except Exception:
+                metadata["document_analysis"] = {}
+        else:
+            metadata["document_analysis"] = analyze_document_text(full_text, str(metadata.get("extension") or ""))
+
         stored_path = user_dir / str(metadata.get("stored_name"))
         if metadata.get("kind") == "image" and stored_path.exists():
             metadata["image_base64"] = base64.b64encode(stored_path.read_bytes()).decode("ascii")
@@ -150,5 +203,13 @@ def attachments_prompt_context(items: list[dict[str, Any]]) -> str:
         if not text:
             blocks.append(f"ARQUIVO ANEXADO: {name} (sem texto extraível)")
             continue
-        blocks.append(f"ARQUIVO ANEXADO: {name}\n---\n{text}\n---")
+        note = (
+            "\nNOTA: por desempenho do modelo local, o conteúdo abaixo é uma amostra do documento. "
+            "Não afirme ter revisado trechos que não aparecem no contexto."
+            if item.get("prompt_text_truncated")
+            else ""
+        )
+        validation = validation_prompt_block(item.get("document_analysis") or {})
+        validation_text = f"\n{validation}" if validation else ""
+        blocks.append(f"ARQUIVO ANEXADO: {name}{note}{validation_text}\n---\n{text}\n---")
     return "\n\n".join(blocks)
